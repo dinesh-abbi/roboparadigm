@@ -46,46 +46,54 @@
 :root {
   --radius: 0.5rem;
 
-  /* Deep navy / black base with cyan accent */
-  --background: oklch(0.16 0.025 250);
+  /* ── Deep black base — logo-aligned blue + copper palette ── */
+  --background: oklch(0.10 0.015 255);
   --foreground: oklch(0.96 0.005 250);
-  --surface: oklch(0.19 0.028 250);
-  --surface-elevated: oklch(0.225 0.03 250);
+  --surface: oklch(0.14 0.020 258);
+  --surface-elevated: oklch(0.18 0.025 258);
 
-  --card: oklch(0.20 0.028 250);
+  --card: oklch(0.14 0.020 258);
   --card-foreground: oklch(0.96 0.005 250);
-  --popover: oklch(0.20 0.028 250);
+  --popover: oklch(0.14 0.020 258);
   --popover-foreground: oklch(0.96 0.005 250);
 
-  --primary: oklch(0.82 0.16 200);            /* electric cyan */
-  --primary-foreground: oklch(0.15 0.03 250);
-  --secondary: oklch(0.25 0.03 250);
+  /* ── Primary: Electric Blue — matches logo blue ── */
+  --primary: oklch(0.65 0.22 248);
+  --primary-foreground: oklch(0.98 0 0);
+
+  --secondary: oklch(0.22 0.025 258);
   --secondary-foreground: oklch(0.96 0.005 250);
-  --muted: oklch(0.24 0.025 250);
-  --muted-foreground: oklch(0.7 0.02 250);
-  --accent: oklch(0.78 0.18 80);               /* amber callout */
-  --accent-foreground: oklch(0.15 0.03 250);
+  --muted: oklch(0.19 0.020 258);
+  --muted-foreground: oklch(0.62 0.015 250);
+
+  /* ── Accent: Copper/Amber — matches logo copper ── */
+  --accent: oklch(0.72 0.16 52);
+  --accent-foreground: oklch(0.10 0.015 255);
+
   --destructive: oklch(0.65 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
 
-  --border: oklch(0.28 0.02 250);
-  --border-strong: oklch(0.38 0.025 250);
-  --input: oklch(0.28 0.02 250);
-  --ring: oklch(0.82 0.16 200);
+  --border: oklch(0.22 0.018 258);
+  --border-strong: oklch(0.32 0.025 258);
+  --input: oklch(0.22 0.018 258);
+  --ring: oklch(0.65 0.22 248);
 
-  --status-demo: oklch(0.78 0.18 155);
-  --status-dev: oklch(0.78 0.18 80);
-  --status-research: oklch(0.75 0.16 290);
-  --status-sim: oklch(0.82 0.16 200);
+  /* ── Status colors ── */
+  --status-demo:     oklch(0.72 0.18 155);   /* emerald */
+  --status-dev:      oklch(0.72 0.16 52);    /* copper */
+  --status-research: oklch(0.68 0.18 290);   /* violet */
+  --status-sim:      oklch(0.65 0.22 248);   /* blue */
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
+    box-sizing: border-box;
   }
 
   html {
     background-color: var(--color-background);
+    scroll-behavior: smooth;
   }
 
   body {
@@ -93,6 +101,7 @@
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4 {
@@ -101,33 +110,119 @@
   }
 
   ::selection {
-    background-color: oklch(0.82 0.16 200 / 0.3);
+    background-color: oklch(0.65 0.22 248 / 0.25);
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--color-background); }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.28 0.025 258);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.65 0.22 248 / 0.5);
   }
 }
 
 @layer utilities {
   .font-display { font-family: var(--font-display); }
-  .font-mono { font-family: var(--font-mono); }
+  .font-mono    { font-family: var(--font-mono); }
 
+  /* Subtle grid — technical HUD feel */
   .bg-grid {
     background-image:
-      linear-gradient(to right, oklch(0.3 0.02 250 / 0.25) 1px, transparent 1px),
-      linear-gradient(to bottom, oklch(0.3 0.02 250 / 0.25) 1px, transparent 1px);
-    background-size: 48px 48px;
+      linear-gradient(to right, oklch(0.32 0.025 258 / 0.15) 1px, transparent 1px),
+      linear-gradient(to bottom, oklch(0.32 0.025 258 / 0.15) 1px, transparent 1px);
+    background-size: 52px 52px;
   }
 
+  /* Dot grid for variety */
+  .bg-dots {
+    background-image: radial-gradient(oklch(0.38 0.03 258 / 0.20) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* Blue radial glow — matches primary */
   .bg-radial-glow {
-    background-image: radial-gradient(ellipse at top, oklch(0.82 0.16 200 / 0.12), transparent 60%);
+    background-image: radial-gradient(ellipse at top, oklch(0.65 0.22 248 / 0.09), transparent 65%);
   }
 
+  /* Dual ambient: blue top-left + copper bottom-right — logo colors */
+  .bg-ambient-glow {
+    background-image:
+      radial-gradient(ellipse at top left,    oklch(0.65 0.22 248 / 0.07), transparent 55%),
+      radial-gradient(ellipse at bottom right, oklch(0.72 0.16 52  / 0.07), transparent 55%);
+  }
+
+  /* ── Text gradients ── */
+
+  /* Blue → copper: the logo's signature combination */
   .text-gradient {
-    background: linear-gradient(135deg, oklch(0.96 0.005 250), oklch(0.82 0.16 200));
+    background: linear-gradient(135deg, oklch(0.80 0.18 248), oklch(0.72 0.16 52));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
 
-  .glow-cyan {
-    box-shadow: 0 0 40px -10px oklch(0.82 0.16 200 / 0.5);
+  /* Pure blue gradient */
+  .text-gradient-blue {
+    background: linear-gradient(135deg, oklch(0.85 0.14 248), oklch(0.60 0.25 248));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
+
+  /* Copper/amber gradient */
+  .text-gradient-copper {
+    background: linear-gradient(135deg, oklch(0.85 0.14 60), oklch(0.68 0.18 45));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* ── Glow utilities ── */
+  .glow-primary {
+    box-shadow:
+      0 0 35px -8px oklch(0.65 0.22 248 / 0.50),
+      0 0 0 1px oklch(0.65 0.22 248 / 0.12);
+  }
+
+  .glow-copper {
+    box-shadow:
+      0 0 35px -8px oklch(0.72 0.16 52 / 0.45),
+      0 0 0 1px oklch(0.72 0.16 52 / 0.15);
+  }
+
+  /* Legacy alias */
+  .glow-cyan { box-shadow: 0 0 35px -8px oklch(0.65 0.22 248 / 0.45); }
+
+  /* ── Glass card ── */
+  .glass {
+    background: oklch(0.14 0.020 258 / 0.75);
+    backdrop-filter: blur(16px);
+    border: 1px solid oklch(0.32 0.025 258 / 0.45);
+  }
+
+  /* ── Accent border for copper highlights ── */
+  .accent-line {
+    border-left: 2px solid oklch(0.72 0.16 52);
+    padding-left: 1rem;
+  }
+
+  /* ── Floating animation ── */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-6px); }
+  }
+  .animate-float { animation: float 4s ease-in-out infinite; }
+
+  /* ── Pulse ring ── */
+  @keyframes pulse-ring {
+    0%   { transform: scale(1);   opacity: 0.8; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+  .animate-pulse-ring { animation: pulse-ring 2.2s ease-out infinite; }
+
+  /* ── Image overlay helpers ── */
+  .img-overlay { background: linear-gradient(to top, oklch(0.10 0.015 255) 0%, transparent 60%); }
 }

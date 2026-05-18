@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
+import logoImg from "@/assets/logos/roboparadigm-logo.png";
 
 const nav = [
   { to: "/", label: "Home" },
@@ -15,26 +16,49 @@ const nav = [
 
 export function Header() {
   const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <Link to="/" className="flex items-center gap-2 group" onClick={() => setOpen(false)}>
-          <div className="relative h-7 w-7">
-            <div className="absolute inset-0 rounded-sm border border-primary" />
-            <div className="absolute inset-1 rounded-sm bg-primary/30 group-hover:bg-primary/60 transition-colors" />
+    <header
+      className={`sticky top-0 z-50 border-b transition-all duration-300 ${
+        scrolled
+          ? "border-border bg-background/90 backdrop-blur-2xl shadow-lg shadow-black/20"
+          : "border-border/50 bg-background/70 backdrop-blur-xl"
+      }`}
+    >
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-3 group" onClick={() => setOpen(false)}>
+          <div className="relative h-10 w-10 overflow-hidden rounded-md">
+            <img
+              src={logoImg}
+              alt="RoboParadigm Logo"
+              className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-300"
+            />
           </div>
-          <span className="font-display text-lg font-bold tracking-tight">
-            Robo<span className="text-primary">Paradigm</span>
-          </span>
+          <div className="flex flex-col leading-none">
+            <span className="font-display text-[15px] font-bold tracking-tight">
+              Robo<span className="text-primary">Paradigm</span>
+            </span>
+            <span className="font-mono text-[9px] text-muted-foreground uppercase tracking-widest mt-0.5">
+              Intelligent Robotics
+            </span>
+          </div>
         </Link>
 
-        <nav className="hidden lg:flex items-center gap-1">
+        {/* Desktop Nav */}
+        <nav className="hidden lg:flex items-center gap-0.5">
           {nav.map((n) => (
             <Link
               key={n.to}
               to={n.to}
-              className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors data-[status=active]:text-primary"
+              className="px-3 py-2 text-[13px] text-muted-foreground hover:text-foreground transition-colors rounded-md hover:bg-surface data-[status=active]:text-primary data-[status=active]:bg-primary/8 font-medium"
               activeOptions={{ exact: n.to === "/" }}
             >
               {n.label}
@@ -42,17 +66,20 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="hidden lg:block">
+        {/* CTA */}
+        <div className="hidden lg:flex items-center gap-3">
           <Link
             to="/contact"
-            className="inline-flex items-center gap-2 rounded-sm border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
+            className="inline-flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-4 py-2 text-[13px] font-semibold text-primary hover:bg-primary/20 hover:border-primary/60 transition-all duration-200"
           >
-            Contact
+            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+            Contact Us
           </Link>
         </div>
 
+        {/* Mobile Toggle */}
         <button
-          className="lg:hidden p-2 text-foreground"
+          className="lg:hidden p-2 text-foreground rounded-md hover:bg-surface transition-colors"
           onClick={() => setOpen((o) => !o)}
           aria-label="Toggle menu"
         >
@@ -60,15 +87,16 @@ export function Header() {
         </button>
       </div>
 
+      {/* Mobile Menu */}
       {open && (
-        <div className="lg:hidden border-t border-border bg-background">
-          <div className="px-6 py-4 flex flex-col gap-1">
+        <div className="lg:hidden border-t border-border bg-background/95 backdrop-blur-xl">
+          <div className="px-6 py-4 flex flex-col gap-0.5">
             {nav.map((n) => (
               <Link
                 key={n.to}
                 to={n.to}
                 onClick={() => setOpen(false)}
-                className="px-2 py-2 text-sm text-muted-foreground hover:text-foreground data-[status=active]:text-primary"
+                className="px-3 py-2.5 text-sm text-muted-foreground hover:text-foreground rounded-md hover:bg-surface data-[status=active]:text-primary data-[status=active]:bg-primary/8 transition-colors"
                 activeOptions={{ exact: n.to === "/" }}
               >
                 {n.label}
@@ -77,9 +105,9 @@ export function Header() {
             <Link
               to="/contact"
               onClick={() => setOpen(false)}
-              className="mt-2 inline-flex items-center justify-center rounded-sm border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary"
+              className="mt-3 inline-flex items-center justify-center rounded-md border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary"
             >
-              Contact
+              Contact Us
             </Link>
           </div>
         </div>

@@ -1,14 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Mail, MapPin } from "lucide-react";
+import { useState } from "react";
+import { Mail, MapPin, Send, Users, FlaskConical, Handshake } from "lucide-react";
 import { PageHero, SectionLabel } from "@/components/site/primitives";
+import robot2 from "@/assets/posters/robot2.png";
+import logoEnhanced from "@/assets/logos/logo-enhanced.png";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
     meta: [
-      { title: "Contact — Work With RoboParadigm" },
-      { name: "description", content: "Get in touch with RoboParadigm for partnerships, internships, research collaborations, and intelligent robotic automation opportunities." },
+      { title: "Contact — Work With RoboParadigm | Collaborate & Join Us" },
+      { name: "description", content: "Connect with RoboParadigm to explore partnerships, internships, research collaborations, and automation opportunities. Building intelligent robotic systems together." },
       { property: "og:title", content: "Work With RoboParadigm" },
-      { property: "og:description", content: "Collaborate, learn, build, or deploy intelligent robotic systems with RoboParadigm." },
       { property: "og:url", content: "/contact" },
     ],
     links: [{ rel: "canonical", href: "/contact" }],
@@ -16,64 +18,225 @@ export const Route = createFileRoute("/contact")({
   component: Contact,
 });
 
+const contactReasons = [
+  {
+    icon: Handshake,
+    title: "Collaborate",
+    desc: "Research partnerships, joint development, and technology collaboration",
+    color: "text-primary",
+    borderColor: "border-primary/30",
+    bgColor: "bg-primary/8",
+  },
+  {
+    icon: FlaskConical,
+    title: "Lab Automation",
+    desc: "Deploy intelligent robotic systems in your lab or research environment",
+    color: "text-[oklch(0.75_0.20_155)]",
+    borderColor: "border-[oklch(0.75_0.20_155)/30]",
+    bgColor: "bg-[oklch(0.75_0.20_155)/8]",
+  },
+  {
+    icon: Users,
+    title: "Join RoboParadigm",
+    desc: "Internships, student programs, and career opportunities in robotics",
+    color: "text-[oklch(0.82_0.20_75)]",
+    borderColor: "border-[oklch(0.82_0.20_75)/30]",
+    bgColor: "bg-[oklch(0.82_0.20_75)/8]",
+  },
+];
+
 function Contact() {
+  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
+  const [sent, setSent] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // Build mailto link
+    const mailtoLink = `mailto:contact@roboparadigm.org?subject=${encodeURIComponent(form.subject || "Inquiry from roboparadigm.org")}&body=${encodeURIComponent(
+      `Name: ${form.name}\nEmail: ${form.email}\n\n${form.message}`
+    )}`;
+    window.location.href = mailtoLink;
+    setSent(true);
+  };
+
   return (
     <>
-      <PageHero
-        eyebrow="Contact"
-        title={<>Work with <span className="text-primary">RoboParadigm</span>.</>}
-        subtitle="Interested in collaborating, learning, building, or deploying intelligent robotic systems? Connect with us to explore partnerships, internships, research collaborations, and automation opportunities."
-      />
+      {/* Hero */}
+      <section className="relative overflow-hidden border-b border-border min-h-[50vh] flex items-center">
+        <div className="absolute inset-0">
+          <img src={robot2} alt="RoboParadigm — Work With Us" className="w-full h-full object-cover opacity-15" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/85 to-background/50" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+        </div>
+        <div className="absolute inset-0 bg-grid opacity-15" />
+        <div className="absolute inset-0 bg-radial-glow" />
+        <div className="relative mx-auto max-w-7xl px-6 py-24 md:py-32 w-full">
+          <SectionLabel>Contact</SectionLabel>
+          <h1 className="mt-6 max-w-3xl font-display text-4xl md:text-6xl font-bold leading-[1.05]">
+            Work With <span className="text-gradient">Us</span>.
+          </h1>
+          <p className="mt-6 max-w-xl text-lg text-muted-foreground leading-relaxed">
+            Interested in collaborating, learning, building, or deploying intelligent robotic systems?
+            Connect with RoboParadigm to explore partnerships, internships, research collaborations,
+            and automation opportunities.
+          </p>
+        </div>
+      </section>
 
+      {/* Contact reasons */}
       <section className="border-b border-border">
-        <div className="mx-auto max-w-7xl px-6 py-20 grid lg:grid-cols-2 gap-12">
-          <div className="space-y-6">
-            <SectionLabel>Reach Us</SectionLabel>
-            <a
-              href="mailto:contact@roboparadigm.org"
-              className="group flex items-start gap-5 rounded-md border border-border bg-surface/50 p-6 hover:border-primary/50 transition-colors"
-            >
-              <Mail className="h-6 w-6 text-primary shrink-0" />
-              <div>
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Email</div>
-                <div className="mt-1 font-display text-xl font-semibold group-hover:text-primary transition-colors">
-                  contact@roboparadigm.org
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  For partnerships, internships, and research inquiries.
-                </p>
+        <div className="mx-auto max-w-7xl px-6 py-16">
+          <div className="grid md:grid-cols-3 gap-5">
+            {contactReasons.map((r) => (
+              <div key={r.title} className={`rounded-xl border ${r.borderColor} ${r.bgColor} p-6`}>
+                <r.icon className={`h-6 w-6 ${r.color} mb-4`} />
+                <h3 className="font-display text-lg font-bold mb-2">{r.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{r.desc}</p>
               </div>
-            </a>
-            <div className="flex items-start gap-5 rounded-md border border-border bg-surface/50 p-6">
-              <MapPin className="h-6 w-6 text-primary shrink-0" />
-              <div>
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Location</div>
-                <div className="mt-1 font-display text-xl font-semibold">India</div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Main contact section */}
+      <section className="border-b border-border">
+        <div className="mx-auto max-w-7xl px-6 py-20 grid lg:grid-cols-2 gap-16 items-start">
+          {/* Contact info */}
+          <div>
+            <SectionLabel>Get in Touch</SectionLabel>
+            <h2 className="mt-6 font-display text-3xl md:text-4xl font-bold leading-tight">
+              Let's build something<br />
+              <span className="text-gradient">intelligent together.</span>
+            </h2>
+            <p className="mt-6 text-muted-foreground leading-relaxed">
+              Whether you're a researcher, an industry partner, an academic institution, or
+              someone who wants to join our team — we'd love to hear from you.
+            </p>
+
+            <div className="mt-10 space-y-4">
+              <a
+                href="mailto:contact@roboparadigm.org"
+                id="contact-email-link"
+                className="flex items-center gap-4 rounded-xl border border-border bg-surface/40 p-4 hover:border-primary/40 hover:bg-surface transition-all group"
+              >
+                <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                  <Mail className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Email</div>
+                  <div className="text-sm font-medium group-hover:text-primary transition-colors">contact@roboparadigm.org</div>
+                </div>
+              </a>
+
+              <div className="flex items-center gap-4 rounded-xl border border-border bg-surface/40 p-4">
+                <div className="h-10 w-10 rounded-lg bg-surface flex items-center justify-center flex-shrink-0">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div>
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Location</div>
+                  <div className="text-sm font-medium">India</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Logo visual */}
+            <div className="mt-10 rounded-xl overflow-hidden border border-border aspect-video relative">
+              <img src={logoEnhanced} alt="RoboParadigm" className="w-full h-full object-cover opacity-20" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+              <div className="absolute bottom-4 left-4 font-mono text-[10px] text-primary/80 uppercase tracking-wider">
+                RoboParadigm · Intelligent Robotics · India
               </div>
             </div>
           </div>
 
-          <div className="rounded-md border border-primary/30 bg-primary/5 p-8 lg:p-10">
-            <div className="font-mono text-xs uppercase tracking-widest text-primary">// closing statement</div>
-            <p className="mt-5 font-display text-2xl md:text-3xl font-bold leading-tight">
-              RoboParadigm is building the future of intelligent robotic automation
-              — where robots can perceive, plan, learn, and execute real-world
-              workflows with precision, affordability, and adaptability.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <a
-                href="mailto:contact@roboparadigm.org?subject=Collaboration%20Inquiry"
-                className="inline-flex items-center rounded-sm bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                Collaborate With Us
-              </a>
-              <a
-                href="mailto:contact@roboparadigm.org?subject=Join%20RoboParadigm"
-                className="inline-flex items-center rounded-sm border border-border-strong px-5 py-2.5 text-sm font-medium hover:border-primary hover:text-primary transition-colors"
-              >
-                Join RoboParadigm
-              </a>
-            </div>
+          {/* Contact form */}
+          <div className="rounded-2xl border border-border bg-surface/30 p-8">
+            {sent ? (
+              <div className="text-center py-10">
+                <div className="h-14 w-14 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto mb-4">
+                  <Send className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-display text-xl font-bold mb-2">Message sent!</h3>
+                <p className="text-sm text-muted-foreground">Your email client should have opened. We'll get back to you soon.</p>
+                <button
+                  onClick={() => setSent(false)}
+                  className="mt-6 text-sm text-primary hover:underline font-mono"
+                >
+                  Send another message
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label htmlFor="contact-name" className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                    Your Name
+                  </label>
+                  <input
+                    id="contact-name"
+                    type="text"
+                    required
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all placeholder:text-muted-foreground/40"
+                    placeholder="Dr. Firstname Lastname"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="contact-email" className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                    Email Address
+                  </label>
+                  <input
+                    id="contact-email"
+                    type="email"
+                    required
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                    className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all placeholder:text-muted-foreground/40"
+                    placeholder="you@institution.org"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="contact-subject" className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                    Subject
+                  </label>
+                  <select
+                    id="contact-subject"
+                    value={form.subject}
+                    onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+                    className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all text-foreground"
+                  >
+                    <option value="">Select a reason...</option>
+                    <option value="Collaboration Inquiry">Research Collaboration</option>
+                    <option value="Lab Automation Inquiry">Lab Automation</option>
+                    <option value="Internship / Join RoboParadigm">Internship / Join Us</option>
+                    <option value="Industry Partnership">Industry Partnership</option>
+                    <option value="General Inquiry">General Inquiry</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="contact-message" className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+                    Message
+                  </label>
+                  <textarea
+                    id="contact-message"
+                    required
+                    rows={5}
+                    value={form.message}
+                    onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))}
+                    className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all resize-none placeholder:text-muted-foreground/40"
+                    placeholder="Tell us about your project, institution, or what you're looking to build..."
+                  />
+                </div>
+                <button
+                  type="submit"
+                  id="contact-submit"
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all glow-primary"
+                >
+                  <Send className="h-4 w-4" />
+                  Send Message
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </section>
