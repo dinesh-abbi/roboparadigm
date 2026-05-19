@@ -14,16 +14,16 @@ type Status =
   | "Validated";
 
 const statusStyles: Record<string, string> = {
-  "Demo Ready":             "bg-status-demo/15 text-status-demo border-status-demo/30",
-  "Prototype Complete":     "bg-status-demo/15 text-status-demo border-status-demo/30",
-  "Validated":              "bg-status-demo/15 text-status-demo border-status-demo/30",
-  "In Active Development":  "bg-status-dev/15 text-status-dev border-status-dev/30",
-  "Teleoperation Working":  "bg-status-dev/15 text-status-dev border-status-dev/30",
-  "AI Pipeline Ready":      "bg-status-sim/15 text-status-sim border-status-sim/30",
-  "Simulation Validated":   "bg-status-sim/15 text-status-sim border-status-sim/30",
-  "Research Track":         "bg-status-research/15 text-status-research border-status-research/30",
-  "Research in Progress":   "bg-status-research/15 text-status-research border-status-research/30",
-  "Roadmap":                "bg-muted text-muted-foreground border-border-strong",
+  "Demo Ready": "bg-status-demo/15 text-status-demo border-status-demo/30",
+  "Prototype Complete": "bg-status-demo/15 text-status-demo border-status-demo/30",
+  "Validated": "bg-status-demo/15 text-status-demo border-status-demo/30",
+  "In Active Development": "bg-status-dev/15 text-status-dev border-status-dev/30",
+  "Teleoperation Working": "bg-status-dev/15 text-status-dev border-status-dev/30",
+  "AI Pipeline Ready": "bg-status-sim/15 text-status-sim border-status-sim/30",
+  "Simulation Validated": "bg-status-sim/15 text-status-sim border-status-sim/30",
+  "Research Track": "bg-status-research/15 text-status-research border-status-research/30",
+  "Research in Progress": "bg-status-research/15 text-status-research border-status-research/30",
+  "Roadmap": "bg-muted text-muted-foreground border-border-strong",
 };
 
 export function StatusBadge({ status }: { status: string }) {

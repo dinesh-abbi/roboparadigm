@@ -128,23 +128,47 @@ function Contact() {
                 </div>
               </a>
 
-              <div className="flex items-center gap-4 rounded-xl border border-border bg-surface/40 p-4">
-                <div className="h-10 w-10 rounded-lg bg-surface flex items-center justify-center flex-shrink-0">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
+              <a
+                href="https://maps.app.goo.gl/7kLbpDuQ4DZHTTMR8"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-4 rounded-xl border border-border bg-surface/40 p-4 hover:border-primary/40 hover:bg-surface transition-all group"
+              >
+                <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                  <MapPin className="h-4 w-4 text-primary" />
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Location</div>
-                  <div className="text-sm font-medium">India</div>
+                  <div className="text-sm font-medium leading-relaxed group-hover:text-primary transition-colors">
+                    Peerzadiguda Road, Village, Uppal, Kachawanisingaram, Hyderabad, Telangana 500088
+                  </div>
                 </div>
-              </div>
+              </a>
             </div>
 
-            {/* Logo visual */}
-            <div className="mt-10 rounded-xl overflow-hidden border border-border aspect-video relative">
-              <img src={logoEnhanced} alt="RoboParadigm" className="w-full h-full object-cover opacity-20" />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-              <div className="absolute bottom-4 left-4 font-mono text-[10px] text-primary/80 uppercase tracking-wider">
-                RoboParadigm · Intelligent Robotics · India
+            {/* Google Maps embed */}
+            <div className="mt-10 rounded-xl overflow-hidden border border-border-strong bg-background/50 p-1">
+              <div className="aspect-video w-full rounded-lg overflow-hidden relative">
+                <iframe
+                  title="RoboParadigm Location Map"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0, filter: "grayscale(1) invert(0.9) contrast(1.2)" }}
+                  src="https://maps.google.com/maps?q=Teleparadigm%20Towers,%20Hyderabad&t=&z=17&ie=UTF8&iwloc=&output=embed"
+                  loading="lazy"
+                  allowFullScreen
+                />
+              </div>
+              <div className="mt-2 p-2 flex justify-between items-center font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+                <span>RoboParadigm Facility</span>
+                <a
+                  href="https://maps.app.goo.gl/7kLbpDuQ4DZHTTMR8"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  View Full Map →
+                </a>
               </div>
             </div>
           </div>

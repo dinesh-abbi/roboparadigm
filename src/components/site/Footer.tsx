@@ -44,10 +44,15 @@ export function Footer() {
                 <Mail className="h-3.5 w-3.5 group-hover:text-primary" />
                 contact@roboparadigm.org
               </a>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5" />
-                India
-              </div>
+              <a
+                href="https://maps.app.goo.gl/7kLbpDuQ4DZHTTMR8"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors group"
+              >
+                <MapPin className="h-3.5 w-3.5 group-hover:text-primary" />
+                Hyderabad, India
+              </a>
             </div>
 
             <p className="mt-8 font-mono text-[10px] text-muted-foreground/50 tracking-wider">

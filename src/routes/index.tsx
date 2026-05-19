@@ -43,110 +43,115 @@ export const Route = createFileRoute("/")(({
 
 /* ── Capabilities — only the right icon+copy, no per-card images ── */
 const capabilities = [
-  { icon: Wrench,        title: "Robotic Manipulation",  copy: "Custom robotic arms for pick-and-place, handling, and lab automation workflows." },
-  { icon: Cog,           title: "Mobile Robotics",       copy: "Battery-powered platforms with teleoperation and autonomous Nav2 navigation roadmap." },
-  { icon: Brain,         title: "Agentic AI",            copy: "AI pipelines that detect objects, reason over goals, and generate execution plans." },
-  { icon: Eye,           title: "Perception",            copy: "Computer vision for object detection, segmentation, pose estimation, and scene understanding." },
-  { icon: GraduationCap, title: "Robot Learning",        copy: "Learning-from-demonstration and VLA model exploration for generalized task learning." },
-  { icon: Cpu,           title: "Servo Control",         copy: "Servo diagnostics, PID tuning, actuator management, and performance evaluation." },
-  { icon: Layers,        title: "5-Layer Architecture",  copy: "Full-stack engineering covering AI, control, hardware interface, power, and structure." },
-  { icon: Zap,           title: "Full-Stack Integration",copy: "Hardware, control, perception, planning, and learning unified into deployable platforms." },
+  { icon: Wrench, title: "Robotic Manipulation", copy: "Custom robotic arms for pick-and-place, handling, and lab automation workflows." },
+  { icon: Cog, title: "Mobile Robotics", copy: "Battery-powered platforms with teleoperation and autonomous Nav2 navigation roadmap." },
+  { icon: Brain, title: "Agentic AI", copy: "AI pipelines that detect objects, reason over goals, and generate execution plans." },
+  { icon: Eye, title: "Perception", copy: "Computer vision for object detection, segmentation, pose estimation, and scene understanding." },
+  { icon: GraduationCap, title: "Robot Learning", copy: "Learning-from-demonstration and VLA model exploration for generalized task learning." },
+  { icon: Cpu, title: "Servo Control", copy: "Servo diagnostics, PID tuning, actuator management, and performance evaluation." },
+  { icon: Layers, title: "5-Layer Architecture", copy: "Full-stack engineering covering AI, control, hardware interface, power, and structure." },
+  { icon: Zap, title: "Full-Stack Integration", copy: "Hardware, control, perception, planning, and learning unified into deployable platforms." },
 ];
 
 const highlights = [
-  { title: "7-DOF Robotic Arm",       status: "Demo Ready",             tags: ["ROS 2", "MoveIt", "3D Printed"],   img: prof1 },
-  { title: "ServoPilot",              status: "Validated",              tags: ["PID Tuning", "Diagnostics"],       img: prof5 },
-  { title: "Mobile Manipulator",      status: "Teleoperation Working",  tags: ["Raspberry Pi", "Nav2 Roadmap"],    img: prof3 },
-  { title: "Agentic Pipeline",        status: "AI Pipeline Ready",      tags: ["CV", "Agentic AI", "MoveIt"],      img: prof2 },
-  { title: "OMX Wrist-Roll Metrics",  status: "Simulation Validated",   tags: ["Benchmarking", "Research"],        img: prof4 },
-  { title: "Robot Learning",          status: "Research Track",         tags: ["SmolVLA", "Pi0.5", "VLA"],         img: prof6 },
+  { title: "7-DOF Robotic Arm", status: "Demo Ready", tags: ["ROS 2", "MoveIt", "3D Printed"], img: prof1 },
+  { title: "ServoPilot", status: "Validated", tags: ["PID Tuning", "Diagnostics"], img: prof5 },
+  { title: "Mobile Manipulator", status: "Teleoperation Working", tags: ["Raspberry Pi", "Nav2 Roadmap"], img: prof3 },
+  { title: "Agentic Pipeline", status: "AI Pipeline Ready", tags: ["CV", "Agentic AI", "MoveIt"], img: prof2 },
+  { title: "OMX Wrist-Roll Metrics", status: "Simulation Validated", tags: ["Benchmarking", "Research"], img: prof4 },
+  { title: "Robot Learning", status: "Research Track", tags: ["SmolVLA", "Pi0.5", "VLA"], img: prof6 },
 ];
 
 const newsletters = [
-  { issue: "01", title: "Foundation",  desc: "Early builds, architecture decisions, and the start of the RoboParadigm journey.", href: "/newsletters/paradigm-chronicles-01.pdf" },
-  { issue: "02", title: "Expansion",   desc: "Mobile platforms, agentic AI pipelines, and perception system breakthroughs.",      href: "/newsletters/paradigm-chronicles-02.pdf" },
-  { issue: "03", title: "Evolution",   desc: "Robot learning experiments, benchmarking results, and the road ahead.",             href: "/newsletters/paradigm-chronicles-03.pdf" },
+  { issue: "01", title: "Foundation", desc: "Early builds, architecture decisions, and the start of the RoboParadigm journey.", href: "/newsletters/paradigm-chronicles-01.pdf" },
+  { issue: "02", title: "Expansion", desc: "Mobile platforms, agentic AI pipelines, and perception system breakthroughs.", href: "/newsletters/paradigm-chronicles-02.pdf" },
+  { issue: "03", title: "Evolution", desc: "Robot learning experiments, benchmarking results, and the road ahead.", href: "/newsletters/paradigm-chronicles-03.pdf" },
 ];
 
 function Home() {
   return (
     <>
       {/* ════════════════════════════════ HERO ════════════════════════════════ */}
-      <section className="relative overflow-hidden min-h-[92vh] flex items-center">
-        {/* Full-bleed hero image — professional showcase #1 */}
-        <div className="absolute inset-0">
-          <img
-            src={prof1}
-            alt="RoboParadigm intelligent robotic system — professional showcase"
-            className="w-full h-full object-cover object-center opacity-30"
-            fetchPriority="high"
-          />
-          {/* Left-to-right fade so text is always readable */}
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-background/20" />
-          {/* Bottom fade into sections */}
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/30" />
-        </div>
+      <section className="relative overflow-hidden min-h-[85vh] flex items-center pt-16">
+        {/* Deep tech background */}
+        <div className="absolute inset-0 bg-background" />
+        <div className="absolute inset-0 bg-grid opacity-20 [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]" />
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-primary/10 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[oklch(0.72_0.16_52)]/10 blur-[120px] rounded-full pointer-events-none" />
 
-        {/* Subtle grid HUD overlay */}
-        <div className="absolute inset-0 bg-grid opacity-15 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
-        {/* Blue radial glow from top */}
-        <div className="absolute inset-0 bg-radial-glow" />
+        <div className="relative mx-auto max-w-7xl px-6 py-10 md:py-16 w-full grid lg:grid-cols-12 gap-8 items-center">
 
-        <div className="relative mx-auto max-w-7xl px-6 py-24 md:py-36 w-full">
-          <div className="max-w-3xl">
+          {/* Left Column: Copy & Call to Action */}
+          <div className="lg:col-span-6 z-10">
             {/* Eyebrow pill */}
-            <div className="inline-flex items-center gap-2.5 rounded-full border border-primary/25 bg-primary/8 px-4 py-1.5 mb-8">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 mb-6 shadow-[0_0_15px_rgba(var(--color-primary),0.15)]">
               <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-              <span className="font-mono text-[11px] uppercase tracking-widest text-primary">
-                Full-Stack Robotics Initiative
+              <span className="font-mono text-[10px] md:text-[11px] uppercase tracking-widest text-primary">
+                System Initialized // V 1.0
               </span>
             </div>
 
-            <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.02]">
-              Building Intelligent<br />
-              Robotic Systems for{" "}
-              <span className="text-gradient">Real-World Automation</span>
+            <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.02] tracking-tight">
+              Intelligent Robotics for <span className="text-gradient">Real-World Automation</span>
             </h1>
 
-            <p className="mt-7 max-w-xl text-lg text-muted-foreground leading-relaxed">
-              RoboParadigm develops affordable, intelligent robotic systems that can understand,
-              plan, and execute real-world tasks across laboratories, academic institutions,
-              and small-scale industries.
+            <p className="mt-5 max-w-lg text-lg text-muted-foreground leading-relaxed">
+              RoboParadigm develops scalable, intelligent robotic systems that perceive environments, plan agentic workflows, and execute precision tasks across laboratories and research hubs.
             </p>
 
-            <div className="mt-10 flex flex-wrap gap-3">
+            {/* Terminal Snippet */}
+            {/* <div className="mt-6 rounded-xl border border-border-strong bg-[#050505]/80 p-4 font-mono text-[11px] text-muted-foreground shadow-2xl backdrop-blur-md">
+              <div className="flex items-center justify-between mb-3 border-b border-border/50 pb-2">
+                <div className="flex gap-1.5">
+                  <div className="h-2.5 w-2.5 rounded-full bg-border-strong hover:bg-red-500/80 transition-colors" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-border-strong hover:bg-yellow-500/80 transition-colors" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-border-strong hover:bg-green-500/80 transition-colors" />
+                </div>
+                <span className="text-[9px] uppercase tracking-widest text-primary/60">Agent_Terminal</span>
+              </div>
+              <div className="text-primary/90">~ $ init_pipeline --mode=agentic</div>
+              <div className="mt-1.5 text-[oklch(0.72_0.16_52)]">▸ Goal: Execute lab workflow sequence</div>
+              <div className="mt-1.5 text-white/70">▸ Vision Node: Active. 1 target isolated.</div>
+              <div className="mt-1.5 text-white/70">▸ Path Planning: Calculating inverse kinematics... <span className="animate-pulse text-primary">_</span></div>
+            </div> */}
+
+            <div className="mt-8 flex flex-wrap gap-4 items-center">
               <Link
                 to="/projects"
                 id="hero-cta-projects"
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all glow-primary"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-7 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-[0_0_20px_rgba(var(--color-primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--color-primary),0.5)] hover:-translate-y-0.5"
               >
                 Explore Projects <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                to="/collaborations"
-                id="hero-cta-collab"
-                className="inline-flex items-center gap-2 rounded-md border border-border-strong px-6 py-3 text-sm font-medium hover:border-accent/50 hover:text-accent transition-all"
+                to="/architecture"
+                id="hero-cta-arch"
+                className="inline-flex items-center gap-2 rounded-full border border-border-strong bg-surface/30 px-7 py-3 text-sm font-medium hover:border-primary/50 hover:bg-surface transition-all"
               >
-                Collaborate With Us
+                View Architecture
               </Link>
             </div>
-
-            {/* Key stats — copper accent on values */}
-            <div className="mt-14 grid grid-cols-3 gap-8 max-w-xs">
-              {[
-                { value: "7-DOF",  label: "Robotic Arm" },
-                { value: "5",      label: "Layer Stack" },
-                { value: "ROS 2",  label: "Native" },
-              ].map((s) => (
-                <div key={s.label}>
-                  <div className="text-2xl font-display font-bold text-gradient-copper">{s.value}</div>
-                  <div className="font-mono text-[10px] text-muted-foreground mt-1 uppercase tracking-wider">
-                    {s.label}
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
+
+          {/* Right Column: Hero Image Showcase */}
+          <div className="lg:col-span-6 relative hidden lg:flex justify-end items-center">
+            {/* Elegant Image Container */}
+            <div className="relative w-full rounded-2xl overflow-hidden border border-border-strong bg-surface/50 shadow-2xl">
+              <img
+                src={prof1}
+                alt="RoboParadigm 7-DOF Robotic Arm System"
+                className="w-full h-auto object-cover opacity-90 transition-transform duration-700 hover:scale-[1.02]"
+                fetchPriority="high"
+              />
+              {/* Subtle inner shadow and gradient to blend perfectly with dark theme */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-background/30 via-transparent to-primary/5 pointer-events-none" />
+              <div className="absolute inset-0 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-none" />
+            </div>
+
+            {/* Glowing background blob behind the image */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] h-[90%] bg-primary/10 blur-[120px] -z-10 rounded-full" />
+          </div>
+
         </div>
       </section>
 
@@ -244,11 +249,11 @@ function Home() {
             {/* Numbered list — clean, no images */}
             <ol className="mt-8 space-y-3">
               {[
-                ["01", "AI / Decision Layer",  "Perceives, reasons, plans, decides."],
-                ["02", "Control Layer",         "Converts intent into precise motion."],
-                ["03", "Hardware Interface",    "Connects software to physical hardware."],
-                ["04", "Power Layer",           "Supplies, regulates, and protects."],
-                ["05", "Physical Structure",    "Body, joints, gripper, motion."],
+                ["01", "AI / Decision Layer", "Perceives, reasons, plans, decides."],
+                ["02", "Control Layer", "Converts intent into precise motion."],
+                ["03", "Hardware Interface", "Connects software to physical hardware."],
+                ["04", "Power Layer", "Supplies, regulates, and protects."],
+                ["05", "Physical Structure", "Body, joints, gripper, motion."],
               ].map(([n, t, d]) => (
                 <li key={n} className="flex gap-4 group">
                   <span className="font-mono text-xs text-accent mt-0.5 w-6 flex-shrink-0">{n}</span>

@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CTASection, PageHero, SectionLabel } from "@/components/site/primitives";
 import logoEnhanced from "@/assets/logos/logo-enhanced.png";
-import labPhoto from "@/assets/posters/lab-photo.jpeg";
-import prof2 from "@/assets/professional/2.webp";
 import prof1 from "@/assets/professional/1.webp";
 
 export const Route = createFileRoute("/about")({
@@ -18,6 +16,25 @@ export const Route = createFileRoute("/about")({
   }),
   component: About,
 });
+
+const faqItems = [
+  {
+    q: "What does RoboParadigm do?",
+    a: "RoboParadigm is building intelligent, low-cost robotic systems that can understand, plan, and execute real-world tasks. We focus on laboratories and small-scale industries, where a large portion of work is still manual and can be automated."
+  },
+  {
+    q: "What kind of projects are you working on, and what tech stack do you use?",
+    a: "We're currently working on multiple layers of the robotics stack. On the hardware side, we build robotic arms and mobile manipulators—designing, 3D printing, and assembling everything in-house. On the software side, we develop perception systems using computer vision for object detection, segmentation, and pose estimation. We're also exploring learning from demonstration, where robots learn tasks by observing humans instead of being explicitly programmed."
+  },
+  {
+    q: "How does this impact the industry?",
+    a: "Today, robot automation is either too expensive or too flexible. We are making automation more affordable and smarter, especially for labs and small industries. Instead of fixed machines, we build systems that can adapt, learn, and handle different tasks. This helps reduce manual work, improve accuracy, and make automation possible in areas where it was difficult before."
+  },
+  {
+    q: "What is your immediate goal with RoboParadigm?",
+    a: "Our immediate goal is to build a fully functional lab automation system where a robot can execute end-to-end experimental workflows. This includes perception, task planning, execution, and logging—all integrated into a single intelligent system. We also aim to make these systems affordable and deployable to academic labs and small industries. Ultimately, we want to create a platform where users can select a workflow, and the robot can autonomously execute it with minimal human intervention."
+  }
+];
 
 const approach = [
   "Design and build robotic hardware in-house",
@@ -67,10 +84,10 @@ function About() {
         </div>
       </section>
 
-      {/* Who We Are — text left, lab photo right */}
+      {/* Who We Are & FAQ — text left, styled Q&A content right instead of image */}
       <section className="border-b border-border">
-        <div className="mx-auto max-w-7xl px-6 py-20 grid md:grid-cols-12 gap-12 items-center">
-          <div className="md:col-span-6">
+        <div className="mx-auto max-w-7xl px-6 py-20 grid lg:grid-cols-12 gap-12 items-start">
+          <div className="lg:col-span-5">
             <SectionLabel>Who We Are</SectionLabel>
             <p className="mt-6 text-lg leading-relaxed text-muted-foreground">
               RoboParadigm is a robotics initiative focused on building integrated, intelligent robotic
@@ -84,19 +101,22 @@ function About() {
               by automating repetitive, manual, and precision-oriented workflows.
             </p>
           </div>
-          <div className="md:col-span-6">
-            {/* Lab photo — landscape, genuine team/lab image */}
-            <div className="rounded-2xl overflow-hidden border border-border-strong">
-              <img
-                src={labPhoto}
-                alt="RoboParadigm lab — working on intelligent robotic systems"
-                className="w-full h-auto"
-                loading="lazy"
-              />
-            </div>
-            <p className="mt-2 font-mono text-[10px] text-muted-foreground text-center uppercase tracking-wider">
-              RoboParadigm lab · hands-on robotics development
-            </p>
+          <div className="lg:col-span-7 space-y-4">
+            <div className="font-mono text-[10px] uppercase tracking-widest text-accent mb-2">Core Questions</div>
+            {faqItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="rounded-xl border border-border bg-surface/30 p-5 hover:border-primary/30 transition-all group"
+              >
+                <h3 className="font-display font-bold text-sm text-gradient-copper flex gap-2 items-start">
+                  <span className="text-primary font-mono flex-shrink-0">{String(idx + 1).padStart(2, "0")}.</span>
+                  <span>{item.q}</span>
+                </h3>
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed pl-7">
+                  {item.a}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
