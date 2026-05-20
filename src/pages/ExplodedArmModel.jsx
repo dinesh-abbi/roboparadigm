@@ -1,0 +1,1512 @@
+import { Suspense, useRef, useState, useEffect, useMemo } from "react";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { OrbitControls, Html } from "@react-three/drei";
+import { useScroll, useTransform, motion } from "framer-motion";
+import * as THREE from "three";
+
+// ─── Explosion offset map ───────────────────────────────────────────────────
+// Each group gets a unique engineered explosion vector.
+// Values tuned so parts spread beautifully but stay in view.
+const EXPLOSION_OFFSETS = {
+  // roboarm groups (arm segments, joints, end-effector)
+  roboarm001_low_0: { pos: [-2.2, 1.8, -1.0], rot: [-0.3, 0.4, 0.2], label: "End Effector Hub", labelOffset: [0, 0.2, 0] },
+  roboarm002_low_1: { pos: [-1.6, 2.4, -0.5], rot: [0.2, -0.3, 0.4] },
+  roboarm003_low_2: { pos: [-0.8, 3.0, 0.2], rot: [-0.4, 0.2, -0.3] },
+  roboarm004_low_3: { pos: [0.4, 3.2, 0.8], rot: [0.3, -0.4, 0.2] },
+  roboarm005_low_4: { pos: [1.4, 3.0, 1.2], rot: [-0.2, 0.5, -0.4], label: "Precision Gripper Jaws", labelOffset: [0, 0.3, 0] },
+  roboarm006_low_5: { pos: [2.4, 2.2, 0.6], rot: [0.4, -0.2, 0.3], label: "Upper Linkage System", labelOffset: [0, 0.4, 0] },
+  roboarm007_low_6: { pos: [3.0, 1.2, -0.2], rot: [-0.3, 0.3, -0.2] },
+  roboarm008_low_7: { pos: [2.8, -0.2, -1.0], rot: [0.2, -0.4, 0.3] },
+  roboarm009_low_8: { pos: [2.0, -1.4, -1.6], rot: [-0.4, 0.2, -0.3] },
+  roboarm010_low_9: { pos: [1.0, -2.2, -1.2], rot: [0.3, -0.3, 0.4] },
+  roboarm011_low_10: { pos: [0.0, -2.8, -0.6], rot: [-0.2, 0.4, -0.2] },
+  roboarm012_low_11: { pos: [-1.0, -2.6, 0.2], rot: [0.4, -0.2, 0.3] },
+  roboarm013_low_12: { pos: [-2.0, -2.0, 0.8], rot: [-0.3, 0.3, -0.4] },
+  roboarm014_low_13: { pos: [-2.8, -1.0, 1.4], rot: [0.2, -0.4, 0.2], label: "Main Column & Actuator", labelOffset: [0, 0.5, 0] },
+  roboarm015_low_14: { pos: [-3.2, 0.2, 1.8], rot: [-0.4, 0.2, -0.3] },
+  roboarm016_low_15: { pos: [-3.0, 1.4, 1.2], rot: [0.3, -0.3, 0.4] },
+  roboarm017_low_16: { pos: [-2.4, 2.4, 0.4], rot: [-0.2, 0.4, -0.2] },
+  roboarm018_low_17: { pos: [-1.6, 3.2, -0.4], rot: [0.4, -0.2, 0.3] },
+  roboarm019_low_18: { pos: [-0.6, 3.6, -1.0], rot: [-0.3, 0.3, -0.4] },
+  roboarm020_low_19: { pos: [0.6, 3.4, -1.6], rot: [0.2, -0.4, 0.2] },
+  roboarm021_low_20: { pos: [1.8, 2.8, -2.0], rot: [-0.4, 0.2, -0.3] },
+  roboarm022_low_21: { pos: [2.8, 1.8, -1.8], rot: [0.3, -0.3, 0.4] },
+  roboarm023_low_22: { pos: [3.4, 0.6, -1.2], rot: [-0.2, 0.4, -0.2] },
+  roboarm024_low_23: { pos: [3.6, -0.8, -0.4], rot: [0.4, -0.2, 0.3] },
+  roboarm025_low_24: { pos: [3.2, -2.0, 0.6], rot: [-0.3, 0.3, -0.4] },
+  roboarm026_low_25: { pos: [2.4, -3.0, 1.4], rot: [0.2, -0.4, 0.2] },
+  roboarm027_low_26: { pos: [1.2, -3.6, 2.0], rot: [-0.4, 0.2, -0.3] },
+  roboarm028_low_27: { pos: [0.0, -3.8, 2.4], rot: [0.3, -0.3, 0.4] },
+  roboarm_low_28: { pos: [-1.2, -3.6, 2.0], rot: [-0.2, 0.4, -0.2] },
+
+  // robot_base groups (structural base, joints, mounts)
+  robot_base_low_51: { pos: [-0.4, 0.2, -2.4], rot: [0.3, -0.2, 0.4] },
+  robot_base001_low_30: { pos: [0.0, 0.0, 0.0], rot: [0.0, 0.0, 0.0] }, // base stays
+  robot_base002_low_31: { pos: [-1.8, 0.6, -2.0], rot: [-0.3, 0.4, -0.2], label: "Primary Base Assembly", labelOffset: [0, 0.4, 0] },
+  robot_base003_low_32: { pos: [-2.6, 0.8, -1.4], rot: [0.4, -0.3, 0.3] },
+  robot_base004_low_33: { pos: [-3.0, 0.4, -0.6], rot: [-0.2, 0.3, -0.4] },
+  robot_base005_low_34: { pos: [-3.2, -0.2, 0.4], rot: [0.3, -0.4, 0.2] },
+  robot_base006_low_35: { pos: [-2.8, -0.8, 1.2], rot: [-0.4, 0.2, -0.3] },
+  robot_base007_low_61: { pos: [-2.0, -1.4, 2.0], rot: [0.2, -0.3, 0.4] },
+  robot_base008_low_36: { pos: [-1.0, -2.0, 2.6], rot: [-0.3, 0.4, -0.2] },
+  robot_base009_low_37: { pos: [0.2, -2.4, 2.8], rot: [0.4, -0.2, 0.3] },
+  robot_base010_low_29: { pos: [0.0, -0.4, -0.2], rot: [-0.1, 0.1, -0.1] }, // near base
+  robot_base011_low_39: { pos: [1.4, -2.6, 2.4], rot: [-0.2, 0.3, -0.4] },
+  robot_base012_low_40: { pos: [2.4, -2.4, 1.6], rot: [0.3, -0.4, 0.2] },
+  robot_base013_low_41: { pos: [3.2, -1.8, 0.6], rot: [-0.4, 0.2, -0.3] },
+  robot_base014_low_42: { pos: [3.6, -0.8, -0.6], rot: [0.2, -0.3, 0.4] },
+  robot_base015_low_43: { pos: [3.4, 0.4, -1.6], rot: [-0.3, 0.4, -0.2] },
+  robot_base016_low_44: { pos: [2.8, 1.4, -2.4], rot: [0.4, -0.2, 0.3] },
+  robot_base017_low_45: { pos: [1.8, 2.2, -2.8], rot: [-0.2, 0.3, -0.4] },
+  robot_base018_low_38: { pos: [0.0, 0.0, 0.0], rot: [0.0, 0.0, 0.0] }, // base group
+  robot_base019_low_47: { pos: [0.6, 2.8, -2.8], rot: [0.3, -0.4, 0.2] },
+  robot_base020_low_46: { pos: [-0.6, 3.0, -2.4], rot: [-0.4, 0.2, -0.3] },
+  robot_base021_low_48: { pos: [-1.8, 2.8, -1.6], rot: [0.2, -0.3, 0.4] },
+  robot_base022_low_49: { pos: [-2.8, 2.2, -0.6], rot: [-0.3, 0.4, -0.2] },
+  robot_base023_low_50: { pos: [-3.4, 1.2, 0.4], rot: [0.4, -0.2, 0.3] },
+  robot_base024_low_52: { pos: [-3.6, 0.0, 1.4], rot: [-0.2, 0.3, -0.4] },
+  robot_base025_low_53: { pos: [-3.2, -1.2, 2.2], rot: [0.3, -0.4, 0.2] },
+  robot_base026_low_54: { pos: [-2.4, -2.2, 2.6], rot: [-0.4, 0.2, -0.3] },
+  robot_base027_low_55: { pos: [-1.2, -2.8, 2.8], rot: [0.2, -0.3, 0.4] },
+  robot_base028_low_56: { pos: [0.0, -3.2, 2.6], rot: [-0.3, 0.4, -0.2] },
+  robot_base029_low_57: { pos: [1.4, -3.2, 2.0], rot: [0.4, -0.2, 0.3] },
+  robot_base030_low_58: { pos: [2.6, -2.6, 1.0], rot: [-0.2, 0.3, -0.4] },
+  robot_base031_low_59: { pos: [3.4, -1.6, 0.0], rot: [0.3, -0.4, 0.2] },
+  robot_base032_low_60: { pos: [3.6, -0.4, -1.0], rot: [-0.4, 0.2, -0.3] },
+  robot_base033_low_62: { pos: [3.0, 0.8, -2.0], rot: [0.2, -0.3, 0.4] },
+  robot_base035_low_63: { pos: [2.0, 1.8, -2.6], rot: [-0.3, 0.4, -0.2] },
+};
+
+// ─── Smoothstep easing for cinematic feel ────────────────────────────────────
+function smoothstep(x) {
+  const t = Math.max(0, Math.min(1, x));
+  return t * t * (3 - 2 * t);
+}
+
+// ─── Explodable Model wrapper ────────────────────────────────────────────────
+// This component re-renders the static GLTF JSX but wraps each named group
+// in an AnimatedGroup so they each move independently on scroll.
+export function ExplodableModel({ staticModel: StaticModelComponent, scrollYProgress, ...props }) {
+  return <StaticModelComponent {...props} explodeProgress={scrollYProgress} />;
+}
+
+// ─── Main Exploded View Scene ─────────────────────────────────────────────────
+// This takes the raw groups from Black-honey.jsx and animates them.
+// CRITICAL: We capture the GLTF rest position/rotation on mount so we can
+// ADD the explosion delta on top — never replacing the baked transform.
+export function ExplodedScene({ nodes, materials, scrollYProgress }) {
+  const groupRefs = useRef({});
+  const labelRefs = useRef({});
+  // Stores the original GLTF-baked world position/rotation for each group
+  const restPose = useRef({});
+  const smoothProgress = useRef(0);
+
+  const setRef = (name) => (el) => {
+    if (el && !groupRefs.current[name]) {
+      groupRefs.current[name] = el;
+      // Capture the rest pose on first assignment (before any animation)
+      restPose.current[name] = {
+        px: el.position.x,
+        py: el.position.y,
+        pz: el.position.z,
+        rx: el.rotation.x,
+        ry: el.rotation.y,
+        rz: el.rotation.z,
+      };
+    } else if (el) {
+      groupRefs.current[name] = el;
+    }
+  };
+
+  useFrame(() => {
+    // Smooth damping towards actual scroll value
+    const target = scrollYProgress ? scrollYProgress.get() : 0;
+    smoothProgress.current += (target - smoothProgress.current) * 0.08;
+    const progress = smoothstep(smoothProgress.current);
+
+    Object.entries(EXPLOSION_OFFSETS).forEach(([name, offset]) => {
+      const ref = groupRefs.current[name];
+      const rest = restPose.current[name];
+      if (!ref || !rest) return;
+
+      // Global multiplier to keep the explosion tight and within viewport bounds
+      // since the main Canvas is scaled up 4x in Model3D.tsx
+      const SCATTER_SCALE = 0.4;
+
+      // ADD explosion delta on top of the GLTF rest transform
+      ref.position.set(
+        rest.px + (offset.pos[0] * progress * SCATTER_SCALE),
+        rest.py + (offset.pos[1] * progress * SCATTER_SCALE),
+        rest.pz + (offset.pos[2] * progress * SCATTER_SCALE)
+      );
+      ref.rotation.set(
+        rest.rx + offset.rot[0] * progress,
+        rest.ry + offset.rot[1] * progress,
+        rest.rz + offset.rot[2] * progress
+      );
+
+      // Sync label group if it exists
+      const labelGroup = labelRefs.current[name];
+      if (labelGroup) {
+        labelGroup.position.copy(ref.position);
+        labelGroup.rotation.copy(ref.rotation);
+      }
+    });
+
+    // Update label opacities via DOM to avoid React re-renders
+    const labelOpacity = progress > 0.4 ? (progress - 0.4) / 0.6 : 0;
+    const labels = document.querySelectorAll('.part-label');
+    labels.forEach((el) => {
+      el.style.opacity = labelOpacity;
+      el.style.transform = `translateY(${(1 - labelOpacity) * 10}px)`;
+      el.style.pointerEvents = labelOpacity > 0.8 ? "auto" : "none";
+    });
+  });
+
+  // Guard: if nodes/materials not loaded yet
+  if (!nodes || !materials) return null;
+
+  return (
+    <group dispose={null}>
+      <group name="Scene">
+        <group name="Sketchfab_model" rotation={[-Math.PI / 2, 0, 0]} scale={1.207}>
+          <group name="root">
+            <group name="GLTF_SceneRootNode" rotation={[Math.PI / 2, 0, 0]}>
+              <group ref={setRef("roboarm001_low_0")} name="roboarm001_low_0" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_4" geometry={nodes.Object_4?.geometry} material={materials.robo_arm} position={[-0.131, 0, 0.059]} />
+                <mesh name="Object_4001" geometry={nodes.Object_4001?.geometry} material={materials.robo_arm} position={[-0.131, 0, 0.057]} />
+                <mesh name="Object_4002" geometry={nodes.Object_4002?.geometry} material={materials.robo_arm} position={[-0.131, 0, -0.036]} />
+                <mesh name="Object_4003" geometry={nodes.Object_4003?.geometry} material={materials.robo_arm} position={[-0.131, 0, -0.035]} />
+              </group>
+              <group ref={setRef("roboarm002_low_1")} name="roboarm002_low_1" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_6" geometry={nodes.Object_6?.geometry} material={materials.robo_arm} position={[-0.113, 0.006, 0.011]} />
+                <mesh name="Object_6001" geometry={nodes.Object_6001?.geometry} material={materials.robo_arm} position={[-0.259, -0.03, 0.012]} />
+                <mesh name="Object_6002" geometry={nodes.Object_6002?.geometry} material={materials.robo_arm} position={[-0.256, 0, 0.01]} />
+                <mesh name="Object_6003" geometry={nodes.Object_6003?.geometry} material={materials.robo_arm} position={[-0.227, -0.027, 0.013]} />
+                <mesh name="Object_6004" geometry={nodes.Object_6004?.geometry} material={materials.robo_arm} position={[-0.257, 0.03, 0.012]} />
+                <mesh name="Object_6005" geometry={nodes.Object_6005?.geometry} material={materials.robo_arm} position={[-0.225, 0.027, 0.013]} />
+                <mesh name="Object_6006" geometry={nodes.Object_6006?.geometry} material={materials.robo_arm} position={[-0.11, 0, 0.046]} />
+                <mesh name="Object_6007" geometry={nodes.Object_6007?.geometry} material={materials.robo_arm} position={[-0.105, -0.005, 0.024]} />
+                <mesh name="Object_6008" geometry={nodes.Object_6008?.geometry} material={materials.robo_arm} position={[-0.105, -0.016, 0.011]} />
+                <mesh name="Object_6009" geometry={nodes.Object_6009?.geometry} material={materials.robo_arm} position={[-0.103, 0.006, 0.011]} />
+                <mesh name="Object_6010" geometry={nodes.Object_6010?.geometry} material={materials.robo_arm} position={[-0.104, 0.026, 0.029]} />
+                <mesh name="Object_6011" geometry={nodes.Object_6011?.geometry} material={materials.robo_arm} position={[-0.107, -0.003, 0.011]} />
+                <mesh name="Object_6012" geometry={nodes.Object_6012?.geometry} material={materials.robo_arm} position={[-0.289, 0.022, 0.011]} />
+                <mesh name="Object_6013" geometry={nodes.Object_6013?.geometry} material={materials.robo_arm} position={[-0.259, 0, -0.05]} />
+                <mesh name="Object_6014" geometry={nodes.Object_6014?.geometry} material={materials.robo_arm} position={[-0.259, 0, 0.073]} />
+                <mesh name="Object_6015" geometry={nodes.Object_6015?.geometry} material={materials.robo_arm} position={[-0.289, -0.022, 0.011]} />
+                <mesh name="Object_6016" geometry={nodes.Object_6016?.geometry} material={materials.robo_arm} position={[-0.291, 0.026, -0.005]} />
+                <mesh name="Object_6017" geometry={nodes.Object_6017?.geometry} material={materials.robo_arm} position={[-0.291, 0.026, 0.027]} />
+                <mesh name="Object_6018" geometry={nodes.Object_6018?.geometry} material={materials.robo_arm} position={[-0.291, -0.026, 0.027]} />
+                <mesh name="Object_6019" geometry={nodes.Object_6019?.geometry} material={materials.robo_arm} position={[-0.291, -0.026, -0.005]} />
+                <mesh name="Object_6020" geometry={nodes.Object_6020?.geometry} material={materials.robo_arm} position={[-0.112, 0.02, -0.004]} />
+                <mesh name="Object_6021" geometry={nodes.Object_6021?.geometry} material={materials.robo_arm} position={[-0.112, 0.02, 0.027]} />
+                <mesh name="Object_6022" geometry={nodes.Object_6022?.geometry} material={materials.robo_arm} position={[-0.132, 0.018, 0.011]} />
+                <mesh name="Object_6023" geometry={nodes.Object_6023?.geometry} material={materials.robo_arm} position={[-0.104, -0.027, 0.011]} />
+                <mesh name="Object_6024" geometry={nodes.Object_6024?.geometry} material={materials.robo_arm} position={[-0.104, 0.026, -0.006]} />
+                <mesh name="Object_6025" geometry={nodes.Object_6025?.geometry} material={materials.robo_arm} position={[-0.105, -0.005, -0.002]} />
+              </group>
+              <group ref={setRef("roboarm003_low_2")} name="roboarm003_low_2" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_8" geometry={nodes.Object_8?.geometry} material={materials.robo_arm} position={[-0.045, 0.002, 0.011]} />
+                <mesh name="Object_8001" geometry={nodes.Object_8001?.geometry} material={materials.robo_arm} position={[-0.03, 0.001, 0.011]} />
+                <mesh name="Object_8002" geometry={nodes.Object_8002?.geometry} material={materials.robo_arm} position={[-0.032, 0.002, 0.011]} />
+                <mesh name="Object_8003" geometry={nodes.Object_8003?.geometry} material={materials.robo_arm} position={[-0.036, 0.002, 0.011]} />
+                <mesh name="Object_8004" geometry={nodes.Object_8004?.geometry} material={materials.robo_arm} position={[-0.037, 0.002, 0.011]} />
+                <mesh name="Object_8005" geometry={nodes.Object_8005?.geometry} material={materials.robo_arm} position={[-0.04, 0.002, 0.011]} />
+                <mesh name="Object_8006" geometry={nodes.Object_8006?.geometry} material={materials.robo_arm} position={[-0.041, 0.002, 0.011]} />
+                <mesh name="Object_8007" geometry={nodes.Object_8007?.geometry} material={materials.robo_arm} position={[-0.037, 0.002, 0.011]} />
+                <mesh name="Object_8008" geometry={nodes.Object_8008?.geometry} material={materials.robo_arm} position={[-0.041, 0.002, 0.011]} />
+                <mesh name="Object_8009" geometry={nodes.Object_8009?.geometry} material={materials.robo_arm} position={[-0.039, 0.002, 0.011]} />
+                <mesh name="Object_8010" geometry={nodes.Object_8010?.geometry} material={materials.robo_arm} position={[-0.034, 0.002, 0.011]} />
+                <mesh name="Object_8011" geometry={nodes.Object_8011?.geometry} material={materials.robo_arm} position={[-0.043, 0.002, 0.011]} />
+              </group>
+              <group ref={setRef("roboarm004_low_3")} name="roboarm004_low_3" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_10" geometry={nodes.Object_10?.geometry} material={materials.robo_arm} position={[-0.05, 0.001, 0.011]} />
+                <mesh name="Object_10001" geometry={nodes.Object_10001?.geometry} material={materials.robo_arm} position={[-0.044, 0.001, 0.011]} />
+                <mesh name="Object_10002" geometry={nodes.Object_10002?.geometry} material={materials.robo_arm} position={[-0.047, 0.002, 0.011]} />
+              </group>
+              <group ref={setRef("roboarm005_low_4")} name="roboarm005_low_4" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_12" geometry={nodes.Object_12?.geometry} material={materials.robo_arm} position={[-0.073, 0.001, 0.011]} />
+              </group>
+              <group ref={setRef("roboarm006_low_5")} name="roboarm006_low_5" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_14" geometry={nodes.Object_14?.geometry} material={materials.robo_arm} position={[-0.262, -0.017, 0.041]} />
+                <mesh name="Object_14001" geometry={nodes.Object_14001?.geometry} material={materials.robo_arm} position={[-0.309, -0.016, 0.078]} />
+                <mesh name="Object_14002" geometry={nodes.Object_14002?.geometry} material={materials.robo_arm} position={[-0.262, -0.017, -0.018]} />
+                <mesh name="Object_14003" geometry={nodes.Object_14003?.geometry} material={materials.robo_arm} position={[-0.309, -0.016, -0.055]} />
+                <mesh name="Object_14004" geometry={nodes.Object_14004?.geometry} material={materials.robo_arm} position={[-0.262, 0.017, 0.041]} />
+                <mesh name="Object_14005" geometry={nodes.Object_14005?.geometry} material={materials.robo_arm} position={[-0.309, 0.016, 0.078]} />
+                <mesh name="Object_14006" geometry={nodes.Object_14006?.geometry} material={materials.robo_arm} position={[-0.262, 0.017, -0.018]} />
+                <mesh name="Object_14007" geometry={nodes.Object_14007?.geometry} material={materials.robo_arm} position={[-0.309, 0.016, -0.055]} />
+                <mesh name="Object_14008" geometry={nodes.Object_14008?.geometry} material={materials.robo_arm} position={[-0.306, -0.018, 0.075]} />
+                <mesh name="Object_14009" geometry={nodes.Object_14009?.geometry} material={materials.robo_arm} position={[-0.359, -0.018, 0.12]} />
+                <mesh name="Object_14010" geometry={nodes.Object_14010?.geometry} material={materials.robo_arm} position={[-0.354, -0.019, 0.112]} />
+                <mesh name="Object_14011" geometry={nodes.Object_14011?.geometry} material={materials.robo_arm} position={[-0.31, -0.017, 0.07]} />
+                <mesh name="Object_14012" geometry={nodes.Object_14012?.geometry} material={materials.robo_arm} position={[-0.302, -0.018, 0.08]} />
+                <mesh name="Object_14013" geometry={nodes.Object_14013?.geometry} material={materials.robo_arm} position={[-0.363, -0.018, 0.115]} />
+                <mesh name="Object_14014" geometry={nodes.Object_14014?.geometry} material={materials.robo_arm} position={[-0.354, -0.018, 0.116]} />
+                <mesh name="Object_14015" geometry={nodes.Object_14015?.geometry} material={materials.robo_arm} position={[-0.358, -0.018, 0.111]} />
+                <mesh name="Object_14016" geometry={nodes.Object_14016?.geometry} material={materials.robo_arm} position={[-0.358, -0.018, 0.115]} />
+                <mesh name="Object_14017" geometry={nodes.Object_14017?.geometry} material={materials.robo_arm} position={[-0.261, -0.016, 0.032]} />
+                <mesh name="Object_14018" geometry={nodes.Object_14018?.geometry} material={materials.robo_arm} position={[-0.253, -0.016, 0.042]} />
+                <mesh name="Object_14019" geometry={nodes.Object_14019?.geometry} material={materials.robo_arm} position={[-0.27, -0.016, 0.036]} />
+                <mesh name="Object_14020" geometry={nodes.Object_14020?.geometry} material={materials.robo_arm} position={[-0.35, -0.018, 0.12]} />
+                <mesh name="Object_14021" geometry={nodes.Object_14021?.geometry} material={materials.robo_arm} position={[-0.359, -0.018, 0.124]} />
+                <mesh name="Object_14022" geometry={nodes.Object_14022?.geometry} material={materials.robo_arm} position={[-0.361, -0.018, 0.106]} />
+                <mesh name="Object_14023" geometry={nodes.Object_14023?.geometry} material={materials.robo_arm} position={[-0.367, -0.018, 0.114]} />
+                <mesh name="Object_14024" geometry={nodes.Object_14024?.geometry} material={materials.robo_arm} position={[-0.302, -0.017, 0.08]} />
+                <mesh name="Object_14025" geometry={nodes.Object_14025?.geometry} material={materials.robo_arm} position={[-0.259, -0.016, 0.05]} />
+                <mesh name="Object_14026" geometry={nodes.Object_14026?.geometry} material={materials.robo_arm} position={[-0.306, -0.018, -0.053]} />
+                <mesh name="Object_14027" geometry={nodes.Object_14027?.geometry} material={materials.robo_arm} position={[-0.358, -0.018, -0.098]} />
+                <mesh name="Object_14028" geometry={nodes.Object_14028?.geometry} material={materials.robo_arm} position={[-0.35, -0.019, -0.087]} />
+                <mesh name="Object_14029" geometry={nodes.Object_14029?.geometry} material={materials.robo_arm} position={[-0.31, -0.017, -0.047]} />
+                <mesh name="Object_14030" geometry={nodes.Object_14030?.geometry} material={materials.robo_arm} position={[-0.363, -0.018, -0.093]} />
+                <mesh name="Object_14031" geometry={nodes.Object_14031?.geometry} material={materials.robo_arm} position={[-0.354, -0.018, -0.093]} />
+                <mesh name="Object_14032" geometry={nodes.Object_14032?.geometry} material={materials.robo_arm} position={[-0.359, -0.018, -0.088]} />
+                <mesh name="Object_14033" geometry={nodes.Object_14033?.geometry} material={materials.robo_arm} position={[-0.358, -0.018, -0.093]} />
+                <mesh name="Object_14034" geometry={nodes.Object_14034?.geometry} material={materials.robo_arm} position={[-0.262, -0.016, -0.01]} />
+                <mesh name="Object_14035" geometry={nodes.Object_14035?.geometry} material={materials.robo_arm} position={[-0.253, -0.016, -0.018]} />
+                <mesh name="Object_14036" geometry={nodes.Object_14036?.geometry} material={materials.robo_arm} position={[-0.27, -0.016, -0.014]} />
+                <mesh name="Object_14037" geometry={nodes.Object_14037?.geometry} material={materials.robo_arm} position={[-0.35, -0.018, -0.097]} />
+                <mesh name="Object_14038" geometry={nodes.Object_14038?.geometry} material={materials.robo_arm} position={[-0.358, -0.018, -0.101]} />
+                <mesh name="Object_14039" geometry={nodes.Object_14039?.geometry} material={materials.robo_arm} position={[-0.362, -0.018, -0.084]} />
+                <mesh name="Object_14040" geometry={nodes.Object_14040?.geometry} material={materials.robo_arm} position={[-0.367, -0.018, -0.094]} />
+                <mesh name="Object_14041" geometry={nodes.Object_14041?.geometry} material={materials.robo_arm} position={[-0.302, -0.017, -0.058]} />
+                <mesh name="Object_14042" geometry={nodes.Object_14042?.geometry} material={materials.robo_arm} position={[-0.258, -0.016, -0.027]} />
+                <mesh name="Object_14043" geometry={nodes.Object_14043?.geometry} material={materials.robo_arm} position={[-0.306, 0.018, 0.075]} />
+                <mesh name="Object_14044" geometry={nodes.Object_14044?.geometry} material={materials.robo_arm} position={[-0.359, 0.018, 0.12]} />
+                <mesh name="Object_14045" geometry={nodes.Object_14045?.geometry} material={materials.robo_arm} position={[-0.35, 0.019, 0.109]} />
+                <mesh name="Object_14046" geometry={nodes.Object_14046?.geometry} material={materials.robo_arm} position={[-0.31, 0.017, 0.07]} />
+                <mesh name="Object_14047" geometry={nodes.Object_14047?.geometry} material={materials.robo_arm} position={[-0.363, 0.018, 0.115]} />
+                <mesh name="Object_14048" geometry={nodes.Object_14048?.geometry} material={materials.robo_arm} position={[-0.354, 0.018, 0.116]} />
+                <mesh name="Object_14049" geometry={nodes.Object_14049?.geometry} material={materials.robo_arm} position={[-0.358, 0.018, 0.111]} />
+                <mesh name="Object_14050" geometry={nodes.Object_14050?.geometry} material={materials.robo_arm} position={[-0.358, 0.018, 0.115]} />
+                <mesh name="Object_14051" geometry={nodes.Object_14051?.geometry} material={materials.robo_arm} position={[-0.261, 0.016, 0.032]} />
+                <mesh name="Object_14052" geometry={nodes.Object_14052?.geometry} material={materials.robo_arm} position={[-0.253, 0.016, 0.042]} />
+                <mesh name="Object_14053" geometry={nodes.Object_14053?.geometry} material={materials.robo_arm} position={[-0.27, 0.016, 0.036]} />
+                <mesh name="Object_14054" geometry={nodes.Object_14054?.geometry} material={materials.robo_arm} position={[-0.35, 0.018, 0.12]} />
+                <mesh name="Object_14055" geometry={nodes.Object_14055?.geometry} material={materials.robo_arm} position={[-0.359, 0.018, 0.124]} />
+                <mesh name="Object_14056" geometry={nodes.Object_14056?.geometry} material={materials.robo_arm} position={[-0.361, 0.018, 0.106]} />
+                <mesh name="Object_14057" geometry={nodes.Object_14057?.geometry} material={materials.robo_arm} position={[-0.367, 0.018, 0.114]} />
+                <mesh name="Object_14058" geometry={nodes.Object_14058?.geometry} material={materials.robo_arm} position={[-0.302, 0.017, 0.08]} />
+                <mesh name="Object_14059" geometry={nodes.Object_14059?.geometry} material={materials.robo_arm} position={[-0.259, 0.016, 0.05]} />
+                <mesh name="Object_14060" geometry={nodes.Object_14060?.geometry} material={materials.robo_arm} position={[-0.306, 0.018, -0.053]} />
+                <mesh name="Object_14061" geometry={nodes.Object_14061?.geometry} material={materials.robo_arm} position={[-0.358, 0.018, -0.098]} />
+                <mesh name="Object_14062" geometry={nodes.Object_14062?.geometry} material={materials.robo_arm} position={[-0.35, 0.019, -0.087]} />
+                <mesh name="Object_14063" geometry={nodes.Object_14063?.geometry} material={materials.robo_arm} position={[-0.31, 0.017, -0.047]} />
+                <mesh name="Object_14064" geometry={nodes.Object_14064?.geometry} material={materials.robo_arm} position={[-0.363, 0.018, -0.093]} />
+                <mesh name="Object_14065" geometry={nodes.Object_14065?.geometry} material={materials.robo_arm} position={[-0.354, 0.018, -0.093]} />
+                <mesh name="Object_14066" geometry={nodes.Object_14066?.geometry} material={materials.robo_arm} position={[-0.359, 0.018, -0.088]} />
+                <mesh name="Object_14067" geometry={nodes.Object_14067?.geometry} material={materials.robo_arm} position={[-0.358, 0.018, -0.093]} />
+                <mesh name="Object_14068" geometry={nodes.Object_14068?.geometry} material={materials.robo_arm} position={[-0.262, 0.016, -0.01]} />
+                <mesh name="Object_14069" geometry={nodes.Object_14069?.geometry} material={materials.robo_arm} position={[-0.253, 0.016, -0.018]} />
+                <mesh name="Object_14070" geometry={nodes.Object_14070?.geometry} material={materials.robo_arm} position={[-0.27, 0.016, -0.014]} />
+                <mesh name="Object_14071" geometry={nodes.Object_14071?.geometry} material={materials.robo_arm} position={[-0.35, 0.018, -0.097]} />
+                <mesh name="Object_14072" geometry={nodes.Object_14072?.geometry} material={materials.robo_arm} position={[-0.358, 0.018, -0.101]} />
+                <mesh name="Object_14073" geometry={nodes.Object_14073?.geometry} material={materials.robo_arm} position={[-0.362, 0.018, -0.084]} />
+                <mesh name="Object_14074" geometry={nodes.Object_14074?.geometry} material={materials.robo_arm} position={[-0.367, 0.018, -0.094]} />
+                <mesh name="Object_14075" geometry={nodes.Object_14075?.geometry} material={materials.robo_arm} position={[-0.302, 0.017, -0.058]} />
+                <mesh name="Object_14076" geometry={nodes.Object_14076?.geometry} material={materials.robo_arm} position={[-0.258, 0.016, -0.027]} />
+              </group>
+              <group ref={setRef("roboarm007_low_6")} name="roboarm007_low_6" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_16" geometry={nodes.Object_16?.geometry} material={materials.robo_arm} position={[-0.309, -0.019, 0.023]} />
+                <mesh name="Object_16001" geometry={nodes.Object_16001?.geometry} material={materials.robo_arm} position={[-0.353, -0.017, 0.059]} />
+                <mesh name="Object_16002" geometry={nodes.Object_16002?.geometry} material={materials.robo_arm} position={[-0.309, -0.019, 0]} />
+                <mesh name="Object_16003" geometry={nodes.Object_16003?.geometry} material={materials.robo_arm} position={[-0.353, -0.017, -0.036]} />
+                <mesh name="Object_16004" geometry={nodes.Object_16004?.geometry} material={materials.robo_arm} position={[-0.309, 0.019, 0.023]} />
+                <mesh name="Object_16005" geometry={nodes.Object_16005?.geometry} material={materials.robo_arm} position={[-0.353, 0.017, 0.059]} />
+                <mesh name="Object_16006" geometry={nodes.Object_16006?.geometry} material={materials.robo_arm} position={[-0.309, 0.019, 0]} />
+                <mesh name="Object_16007" geometry={nodes.Object_16007?.geometry} material={materials.robo_arm} position={[-0.353, 0.017, -0.036]} />
+                <mesh name="Object_16008" geometry={nodes.Object_16008?.geometry} material={materials.robo_arm} position={[-0.368, -0.019, 0.071]} />
+                <mesh name="Object_16009" geometry={nodes.Object_16009?.geometry} material={materials.robo_arm} position={[-0.397, -0.019, 0.099]} />
+                <mesh name="Object_16010" geometry={nodes.Object_16010?.geometry} material={materials.robo_arm} position={[-0.396, -0.019, 0.094]} />
+                <mesh name="Object_16011" geometry={nodes.Object_16011?.geometry} material={materials.robo_arm} position={[-0.354, -0.018, 0.052]} />
+                <mesh name="Object_16012" geometry={nodes.Object_16012?.geometry} material={materials.robo_arm} position={[-0.365, -0.019, 0.076]} />
+                <mesh name="Object_16013" geometry={nodes.Object_16013?.geometry} material={materials.robo_arm} position={[-0.33, -0.019, 0.04]} />
+                <mesh name="Object_16014" geometry={nodes.Object_16014?.geometry} material={materials.robo_arm} position={[-0.333, -0.019, 0.035]} />
+                <mesh name="Object_16015" geometry={nodes.Object_16015?.geometry} material={materials.robo_arm} position={[-0.326, -0.019, 0.044]} />
+                <mesh name="Object_16016" geometry={nodes.Object_16016?.geometry} material={materials.robo_arm} position={[-0.402, -0.019, 0.095]} />
+                <mesh name="Object_16017" geometry={nodes.Object_16017?.geometry} material={materials.robo_arm} position={[-0.394, -0.019, 0.095]} />
+                <mesh name="Object_16018" geometry={nodes.Object_16018?.geometry} material={materials.robo_arm} position={[-0.398, -0.019, 0.091]} />
+                <mesh name="Object_16019" geometry={nodes.Object_16019?.geometry} material={materials.robo_arm} position={[-0.398, -0.018, 0.095]} />
+                <mesh name="Object_16020" geometry={nodes.Object_16020?.geometry} material={materials.robo_arm} position={[-0.31, -0.018, 0.015]} />
+                <mesh name="Object_16021" geometry={nodes.Object_16021?.geometry} material={materials.robo_arm} position={[-0.301, -0.018, 0.022]} />
+                <mesh name="Object_16022" geometry={nodes.Object_16022?.geometry} material={materials.robo_arm} position={[-0.317, -0.018, 0.019]} />
+                <mesh name="Object_16023" geometry={nodes.Object_16023?.geometry} material={materials.robo_arm} position={[-0.39, -0.018, 0.098]} />
+                <mesh name="Object_16024" geometry={nodes.Object_16024?.geometry} material={materials.robo_arm} position={[-0.397, -0.018, 0.103]} />
+                <mesh name="Object_16025" geometry={nodes.Object_16025?.geometry} material={materials.robo_arm} position={[-0.401, -0.018, 0.087]} />
+                <mesh name="Object_16026" geometry={nodes.Object_16026?.geometry} material={materials.robo_arm} position={[-0.405, -0.018, 0.096]} />
+                <mesh name="Object_16027" geometry={nodes.Object_16027?.geometry} material={materials.robo_arm} position={[-0.346, -0.018, 0.061]} />
+                <mesh name="Object_16028" geometry={nodes.Object_16028?.geometry} material={materials.robo_arm} position={[-0.306, -0.018, 0.03]} />
+                <mesh name="Object_16029" geometry={nodes.Object_16029?.geometry} material={materials.robo_arm} position={[-0.368, -0.019, -0.049]} />
+                <mesh name="Object_16030" geometry={nodes.Object_16030?.geometry} material={materials.robo_arm} position={[-0.397, -0.019, -0.077]} />
+                <mesh name="Object_16031" geometry={nodes.Object_16031?.geometry} material={materials.robo_arm} position={[-0.372, -0.019, -0.045]} />
+                <mesh name="Object_16032" geometry={nodes.Object_16032?.geometry} material={materials.robo_arm} position={[-0.354, -0.018, -0.029]} />
+                <mesh name="Object_16033" geometry={nodes.Object_16033?.geometry} material={materials.robo_arm} position={[-0.365, -0.019, -0.053]} />
+                <mesh name="Object_16034" geometry={nodes.Object_16034?.geometry} material={materials.robo_arm} position={[-0.33, -0.019, -0.017]} />
+                <mesh name="Object_16035" geometry={nodes.Object_16035?.geometry} material={materials.robo_arm} position={[-0.333, -0.019, -0.013]} />
+                <mesh name="Object_16036" geometry={nodes.Object_16036?.geometry} material={materials.robo_arm} position={[-0.326, -0.019, -0.021]} />
+                <mesh name="Object_16037" geometry={nodes.Object_16037?.geometry} material={materials.robo_arm} position={[-0.398, -0.019, -0.073]} />
+                <mesh name="Object_16038" geometry={nodes.Object_16038?.geometry} material={materials.robo_arm} position={[-0.402, -0.019, -0.073]} />
+                <mesh name="Object_16039" geometry={nodes.Object_16039?.geometry} material={materials.robo_arm} position={[-0.394, -0.019, -0.072]} />
+                <mesh name="Object_16040" geometry={nodes.Object_16040?.geometry} material={materials.robo_arm} position={[-0.398, -0.019, -0.069]} />
+                <mesh name="Object_16041" geometry={nodes.Object_16041?.geometry} material={materials.robo_arm} position={[-0.398, -0.018, -0.073]} />
+                <mesh name="Object_16042" geometry={nodes.Object_16042?.geometry} material={materials.robo_arm} position={[-0.31, -0.018, 0.007]} />
+                <mesh name="Object_16043" geometry={nodes.Object_16043?.geometry} material={materials.robo_arm} position={[-0.301, -0.018, 0]} />
+                <mesh name="Object_16044" geometry={nodes.Object_16044?.geometry} material={materials.robo_arm} position={[-0.317, -0.018, 0.003]} />
+                <mesh name="Object_16045" geometry={nodes.Object_16045?.geometry} material={materials.robo_arm} position={[-0.39, -0.018, -0.076]} />
+                <mesh name="Object_16046" geometry={nodes.Object_16046?.geometry} material={materials.robo_arm} position={[-0.401, -0.018, -0.077]} />
+                <mesh name="Object_16047" geometry={nodes.Object_16047?.geometry} material={materials.robo_arm} position={[-0.401, -0.018, -0.065]} />
+                <mesh name="Object_16048" geometry={nodes.Object_16048?.geometry} material={materials.robo_arm} position={[-0.346, -0.018, -0.039]} />
+                <mesh name="Object_16049" geometry={nodes.Object_16049?.geometry} material={materials.robo_arm} position={[-0.306, -0.018, -0.008]} />
+                <mesh name="Object_16050" geometry={nodes.Object_16050?.geometry} material={materials.robo_arm} position={[-0.368, 0.019, 0.071]} />
+                <mesh name="Object_16051" geometry={nodes.Object_16051?.geometry} material={materials.robo_arm} position={[-0.397, 0.019, 0.099]} />
+                <mesh name="Object_16052" geometry={nodes.Object_16052?.geometry} material={materials.robo_arm} position={[-0.395, 0.019, 0.093]} />
+                <mesh name="Object_16053" geometry={nodes.Object_16053?.geometry} material={materials.robo_arm} position={[-0.354, 0.018, 0.052]} />
+                <mesh name="Object_16054" geometry={nodes.Object_16054?.geometry} material={materials.robo_arm} position={[-0.33, 0.019, 0.04]} />
+                <mesh name="Object_16055" geometry={nodes.Object_16055?.geometry} material={materials.robo_arm} position={[-0.333, 0.019, 0.035]} />
+                <mesh name="Object_16056" geometry={nodes.Object_16056?.geometry} material={materials.robo_arm} position={[-0.326, 0.019, 0.044]} />
+                <mesh name="Object_16057" geometry={nodes.Object_16057?.geometry} material={materials.robo_arm} position={[-0.402, 0.019, 0.095]} />
+                <mesh name="Object_16058" geometry={nodes.Object_16058?.geometry} material={materials.robo_arm} position={[-0.394, 0.019, 0.095]} />
+                <mesh name="Object_16059" geometry={nodes.Object_16059?.geometry} material={materials.robo_arm} position={[-0.398, 0.019, 0.091]} />
+                <mesh name="Object_16060" geometry={nodes.Object_16060?.geometry} material={materials.robo_arm} position={[-0.398, 0.018, 0.095]} />
+                <mesh name="Object_16061" geometry={nodes.Object_16061?.geometry} material={materials.robo_arm} position={[-0.31, 0.018, 0.015]} />
+                <mesh name="Object_16062" geometry={nodes.Object_16062?.geometry} material={materials.robo_arm} position={[-0.301, 0.018, 0.022]} />
+                <mesh name="Object_16063" geometry={nodes.Object_16063?.geometry} material={materials.robo_arm} position={[-0.317, 0.018, 0.019]} />
+                <mesh name="Object_16064" geometry={nodes.Object_16064?.geometry} material={materials.robo_arm} position={[-0.39, 0.018, 0.098]} />
+                <mesh name="Object_16065" geometry={nodes.Object_16065?.geometry} material={materials.robo_arm} position={[-0.397, 0.018, 0.103]} />
+                <mesh name="Object_16066" geometry={nodes.Object_16066?.geometry} material={materials.robo_arm} position={[-0.401, 0.018, 0.087]} />
+                <mesh name="Object_16067" geometry={nodes.Object_16067?.geometry} material={materials.robo_arm} position={[-0.405, 0.018, 0.096]} />
+                <mesh name="Object_16068" geometry={nodes.Object_16068?.geometry} material={materials.robo_arm} position={[-0.346, 0.018, 0.061]} />
+                <mesh name="Object_16069" geometry={nodes.Object_16069?.geometry} material={materials.robo_arm} position={[-0.306, 0.018, 0.03]} />
+                <mesh name="Object_16070" geometry={nodes.Object_16070?.geometry} material={materials.robo_arm} position={[-0.368, 0.019, -0.049]} />
+                <mesh name="Object_16071" geometry={nodes.Object_16071?.geometry} material={materials.robo_arm} position={[-0.397, 0.019, -0.077]} />
+                <mesh name="Object_16072" geometry={nodes.Object_16072?.geometry} material={materials.robo_arm} position={[-0.396, 0.019, -0.071]} />
+                <mesh name="Object_16073" geometry={nodes.Object_16073?.geometry} material={materials.robo_arm} position={[-0.354, 0.018, -0.029]} />
+                <mesh name="Object_16074" geometry={nodes.Object_16074?.geometry} material={materials.robo_arm} position={[-0.365, 0.019, -0.053]} />
+                <mesh name="Object_16075" geometry={nodes.Object_16075?.geometry} material={materials.robo_arm} position={[-0.33, 0.019, -0.017]} />
+                <mesh name="Object_16076" geometry={nodes.Object_16076?.geometry} material={materials.robo_arm} position={[-0.333, 0.019, -0.013]} />
+                <mesh name="Object_16077" geometry={nodes.Object_16077?.geometry} material={materials.robo_arm} position={[-0.326, 0.019, -0.021]} />
+                <mesh name="Object_16078" geometry={nodes.Object_16078?.geometry} material={materials.robo_arm} position={[-0.402, 0.019, -0.073]} />
+                <mesh name="Object_16079" geometry={nodes.Object_16079?.geometry} material={materials.robo_arm} position={[-0.394, 0.019, -0.072]} />
+                <mesh name="Object_16080" geometry={nodes.Object_16080?.geometry} material={materials.robo_arm} position={[-0.398, 0.019, -0.069]} />
+                <mesh name="Object_16081" geometry={nodes.Object_16081?.geometry} material={materials.robo_arm} position={[-0.398, 0.018, -0.073]} />
+                <mesh name="Object_16082" geometry={nodes.Object_16082?.geometry} material={materials.robo_arm} position={[-0.31, 0.018, 0.007]} />
+                <mesh name="Object_16083" geometry={nodes.Object_16083?.geometry} material={materials.robo_arm} position={[-0.301, 0.018, 0]} />
+                <mesh name="Object_16084" geometry={nodes.Object_16084?.geometry} material={materials.robo_arm} position={[-0.317, 0.018, 0.003]} />
+                <mesh name="Object_16085" geometry={nodes.Object_16085?.geometry} material={materials.robo_arm} position={[-0.39, 0.018, -0.076]} />
+                <mesh name="Object_16086" geometry={nodes.Object_16086?.geometry} material={materials.robo_arm} position={[-0.397, 0.018, -0.08]} />
+                <mesh name="Object_16087" geometry={nodes.Object_16087?.geometry} material={materials.robo_arm} position={[-0.401, 0.018, -0.065]} />
+                <mesh name="Object_16088" geometry={nodes.Object_16088?.geometry} material={materials.robo_arm} position={[-0.405, 0.018, -0.073]} />
+                <mesh name="Object_16089" geometry={nodes.Object_16089?.geometry} material={materials.robo_arm} position={[-0.346, 0.018, -0.039]} />
+                <mesh name="Object_16090" geometry={nodes.Object_16090?.geometry} material={materials.robo_arm} position={[-0.306, 0.018, -0.008]} />
+              </group>
+              <group ref={setRef("roboarm008_low_7")} name="roboarm008_low_7" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_18" geometry={nodes.Object_18?.geometry} material={materials.robo_arm} position={[-0.446, 0, 0.097]} />
+                <mesh name="Object_18001" geometry={nodes.Object_18001?.geometry} material={materials.robo_arm} position={[-0.446, 0, 0.098]} />
+                <mesh name="Object_18002" geometry={nodes.Object_18002?.geometry} material={materials.robo_arm} position={[-0.447, 0, 0.088]} />
+                <mesh name="Object_18003" geometry={nodes.Object_18003?.geometry} material={materials.robo_arm} position={[-0.446, 0, 0.077]} />
+                <mesh name="Object_18004" geometry={nodes.Object_18004?.geometry} material={materials.robo_arm} position={[-0.446, 0, 0.078]} />
+                <mesh name="Object_18005" geometry={nodes.Object_18005?.geometry} material={materials.robo_arm} position={[-0.409, 0, 0.09]} />
+                <mesh name="Object_18006" geometry={nodes.Object_18006?.geometry} material={materials.robo_arm} position={[-0.41, 0, 0.078]} />
+                <mesh name="Object_18007" geometry={nodes.Object_18007?.geometry} material={materials.robo_arm} position={[-0.446, 0, -0.076]} />
+                <mesh name="Object_18008" geometry={nodes.Object_18008?.geometry} material={materials.robo_arm} position={[-0.446, 0, -0.074]} />
+                <mesh name="Object_18009" geometry={nodes.Object_18009?.geometry} material={materials.robo_arm} position={[-0.447, 0, -0.065]} />
+                <mesh name="Object_18010" geometry={nodes.Object_18010?.geometry} material={materials.robo_arm} position={[-0.446, 0, -0.055]} />
+                <mesh name="Object_18011" geometry={nodes.Object_18011?.geometry} material={materials.robo_arm} position={[-0.446, 0, -0.056]} />
+                <mesh name="Object_18012" geometry={nodes.Object_18012?.geometry} material={materials.robo_arm} position={[-0.409, 0, -0.068]} />
+                <mesh name="Object_18013" geometry={nodes.Object_18013?.geometry} material={materials.robo_arm} position={[-0.41, 0, -0.056]} />
+              </group>
+              <group ref={setRef("roboarm009_low_8")} name="roboarm009_low_8" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_20" geometry={nodes.Object_20?.geometry} material={materials.robo_arm} position={[-0.368, -0.016, 0.071]} />
+                <mesh name="Object_20001" geometry={nodes.Object_20001?.geometry} material={materials.robo_arm} position={[-0.336, -0.018, 0.045]} />
+                <mesh name="Object_20002" geometry={nodes.Object_20002?.geometry} material={materials.robo_arm} position={[-0.334, -0.016, 0.048]} />
+                <mesh name="Object_20003" geometry={nodes.Object_20003?.geometry} material={materials.robo_arm} position={[-0.303, -0.016, 0.019]} />
+                <mesh name="Object_20004" geometry={nodes.Object_20004?.geometry} material={materials.robo_arm} position={[-0.368, 0.016, 0.071]} />
+                <mesh name="Object_20005" geometry={nodes.Object_20005?.geometry} material={materials.robo_arm} position={[-0.336, 0.018, 0.045]} />
+                <mesh name="Object_20006" geometry={nodes.Object_20006?.geometry} material={materials.robo_arm} position={[-0.334, 0.016, 0.048]} />
+                <mesh name="Object_20007" geometry={nodes.Object_20007?.geometry} material={materials.robo_arm} position={[-0.303, 0.016, 0.019]} />
+                <mesh name="Object_20008" geometry={nodes.Object_20008?.geometry} material={materials.robo_arm} position={[-0.373, 0, 0.065]} />
+                <mesh name="Object_20009" geometry={nodes.Object_20009?.geometry} material={materials.robo_arm} position={[-0.372, -0.014, 0.067]} />
+                <mesh name="Object_20010" geometry={nodes.Object_20010?.geometry} material={materials.robo_arm} position={[-0.342, 0, 0.038]} />
+                <mesh name="Object_20011" geometry={nodes.Object_20011?.geometry} material={materials.robo_arm} position={[-0.34, -0.015, 0.04]} />
+                <mesh name="Object_20012" geometry={nodes.Object_20012?.geometry} material={materials.robo_arm} position={[-0.307, -0.014, 0.015]} />
+                <mesh name="Object_20013" geometry={nodes.Object_20013?.geometry} material={materials.robo_arm} position={[-0.308, 0, 0.013]} />
+                <mesh name="Object_20014" geometry={nodes.Object_20014?.geometry} material={materials.robo_arm} position={[-0.372, 0.015, 0.067]} />
+                <mesh name="Object_20015" geometry={nodes.Object_20015?.geometry} material={materials.robo_arm} position={[-0.34, 0.016, 0.04]} />
+                <mesh name="Object_20016" geometry={nodes.Object_20016?.geometry} material={materials.robo_arm} position={[-0.307, 0.015, 0.015]} />
+                <mesh name="Object_20017" geometry={nodes.Object_20017?.geometry} material={materials.robo_arm} position={[-0.336, -0.015, 0.045]} />
+                <mesh name="Object_20018" geometry={nodes.Object_20018?.geometry} material={materials.robo_arm} position={[-0.336, 0.015, 0.045]} />
+                <mesh name="Object_20019" geometry={nodes.Object_20019?.geometry} material={materials.robo_arm} position={[-0.339, -0.014, 0.041]} />
+                <mesh name="Object_20020" geometry={nodes.Object_20020?.geometry} material={materials.robo_arm} position={[-0.34, 0, 0.04]} />
+                <mesh name="Object_20021" geometry={nodes.Object_20021?.geometry} material={materials.robo_arm} position={[-0.339, 0.014, 0.041]} />
+                <mesh name="Object_20022" geometry={nodes.Object_20022?.geometry} material={materials.robo_arm} position={[-0.368, -0.016, -0.049]} />
+                <mesh name="Object_20023" geometry={nodes.Object_20023?.geometry} material={materials.robo_arm} position={[-0.336, -0.018, -0.023]} />
+                <mesh name="Object_20024" geometry={nodes.Object_20024?.geometry} material={materials.robo_arm} position={[-0.334, -0.016, -0.026]} />
+                <mesh name="Object_20025" geometry={nodes.Object_20025?.geometry} material={materials.robo_arm} position={[-0.303, -0.016, 0.003]} />
+                <mesh name="Object_20026" geometry={nodes.Object_20026?.geometry} material={materials.robo_arm} position={[-0.368, 0.016, -0.049]} />
+                <mesh name="Object_20027" geometry={nodes.Object_20027?.geometry} material={materials.robo_arm} position={[-0.336, 0.018, -0.023]} />
+                <mesh name="Object_20028" geometry={nodes.Object_20028?.geometry} material={materials.robo_arm} position={[-0.334, 0.016, -0.026]} />
+                <mesh name="Object_20029" geometry={nodes.Object_20029?.geometry} material={materials.robo_arm} position={[-0.303, 0.016, 0.003]} />
+                <mesh name="Object_20030" geometry={nodes.Object_20030?.geometry} material={materials.robo_arm} position={[-0.372, -0.014, -0.045]} />
+                <mesh name="Object_20031" geometry={nodes.Object_20031?.geometry} material={materials.robo_arm} position={[-0.373, 0, -0.043]} />
+                <mesh name="Object_20032" geometry={nodes.Object_20032?.geometry} material={materials.robo_arm} position={[-0.342, 0, -0.016]} />
+                <mesh name="Object_20033" geometry={nodes.Object_20033?.geometry} material={materials.robo_arm} position={[-0.34, -0.015, -0.018]} />
+                <mesh name="Object_20034" geometry={nodes.Object_20034?.geometry} material={materials.robo_arm} position={[-0.307, -0.014, 0.007]} />
+                <mesh name="Object_20035" geometry={nodes.Object_20035?.geometry} material={materials.robo_arm} position={[-0.308, 0, 0.009]} />
+                <mesh name="Object_20036" geometry={nodes.Object_20036?.geometry} material={materials.robo_arm} position={[-0.372, 0.015, -0.045]} />
+                <mesh name="Object_20037" geometry={nodes.Object_20037?.geometry} material={materials.robo_arm} position={[-0.34, 0.016, -0.018]} />
+                <mesh name="Object_20038" geometry={nodes.Object_20038?.geometry} material={materials.robo_arm} position={[-0.307, 0.015, 0.007]} />
+                <mesh name="Object_20039" geometry={nodes.Object_20039?.geometry} material={materials.robo_arm} position={[-0.336, -0.015, -0.023]} />
+                <mesh name="Object_20040" geometry={nodes.Object_20040?.geometry} material={materials.robo_arm} position={[-0.336, 0.015, -0.023]} />
+                <mesh name="Object_20041" geometry={nodes.Object_20041?.geometry} material={materials.robo_arm} position={[-0.339, -0.014, -0.019]} />
+                <mesh name="Object_20042" geometry={nodes.Object_20042?.geometry} material={materials.robo_arm} position={[-0.34, 0, -0.018]} />
+                <mesh name="Object_20043" geometry={nodes.Object_20043?.geometry} material={materials.robo_arm} position={[-0.339, 0.014, -0.019]} />
+              </group>
+              <group ref={setRef("roboarm010_low_9")} name="roboarm010_low_9" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_22" geometry={nodes.Object_22?.geometry} material={materials.robo_arm} position={[-0.299, 0, 0.04]} />
+                <mesh name="Object_22001" geometry={nodes.Object_22001?.geometry} material={materials.robo_arm} position={[-0.299, 0, -0.018]} />
+              </group>
+              <group ref={setRef("roboarm011_low_10")} name="roboarm011_low_10" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_24" geometry={nodes.Object_24?.geometry} material={materials.robo_arm} position={[-0.306, -0.017, 0.075]} />
+                <mesh name="Object_24001" geometry={nodes.Object_24001?.geometry} material={materials.robo_arm} position={[-0.306, -0.011, 0.076]} />
+                <mesh name="Object_24002" geometry={nodes.Object_24002?.geometry} material={materials.robo_arm} position={[-0.306, -0.005, 0.075]} />
+                <mesh name="Object_24003" geometry={nodes.Object_24003?.geometry} material={materials.robo_arm} position={[-0.307, -0.011, 0.074]} />
+                <mesh name="Object_24004" geometry={nodes.Object_24004?.geometry} material={materials.robo_arm} position={[-0.306, -0.017, -0.053]} />
+                <mesh name="Object_24005" geometry={nodes.Object_24005?.geometry} material={materials.robo_arm} position={[-0.306, -0.011, -0.054]} />
+                <mesh name="Object_24006" geometry={nodes.Object_24006?.geometry} material={materials.robo_arm} position={[-0.306, -0.005, -0.053]} />
+                <mesh name="Object_24007" geometry={nodes.Object_24007?.geometry} material={materials.robo_arm} position={[-0.307, -0.011, -0.051]} />
+                <mesh name="Object_24008" geometry={nodes.Object_24008?.geometry} material={materials.robo_arm} position={[-0.306, 0.017, 0.075]} />
+                <mesh name="Object_24009" geometry={nodes.Object_24009?.geometry} material={materials.robo_arm} position={[-0.306, 0.011, 0.076]} />
+                <mesh name="Object_24010" geometry={nodes.Object_24010?.geometry} material={materials.robo_arm} position={[-0.306, 0.005, 0.075]} />
+                <mesh name="Object_24011" geometry={nodes.Object_24011?.geometry} material={materials.robo_arm} position={[-0.307, 0.011, 0.074]} />
+                <mesh name="Object_24012" geometry={nodes.Object_24012?.geometry} material={materials.robo_arm} position={[-0.306, 0.017, -0.053]} />
+                <mesh name="Object_24013" geometry={nodes.Object_24013?.geometry} material={materials.robo_arm} position={[-0.306, 0.011, -0.054]} />
+                <mesh name="Object_24014" geometry={nodes.Object_24014?.geometry} material={materials.robo_arm} position={[-0.306, 0.005, -0.053]} />
+                <mesh name="Object_24015" geometry={nodes.Object_24015?.geometry} material={materials.robo_arm} position={[-0.307, 0.011, -0.051]} />
+              </group>
+              <group ref={setRef("roboarm012_low_11")} name="roboarm012_low_11" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_26" geometry={nodes.Object_26?.geometry} material={materials.robo_arm} position={[-0.358, -0.018, 0.115]} />
+                <mesh name="Object_26001" geometry={nodes.Object_26001?.geometry} material={materials.robo_arm} position={[-0.358, -0.02, 0.115]} />
+                <mesh name="Object_26002" geometry={nodes.Object_26002?.geometry} material={materials.robo_arm} position={[-0.358, -0.019, 0.115]} />
+                <mesh name="Object_26003" geometry={nodes.Object_26003?.geometry} material={materials.robo_arm} position={[-0.358, 0.018, 0.115]} />
+                <mesh name="Object_26004" geometry={nodes.Object_26004?.geometry} material={materials.robo_arm} position={[-0.358, 0.02, 0.115]} />
+                <mesh name="Object_26005" geometry={nodes.Object_26005?.geometry} material={materials.robo_arm} position={[-0.358, 0.019, 0.115]} />
+                <mesh name="Object_26006" geometry={nodes.Object_26006?.geometry} material={materials.robo_arm} position={[-0.358, -0.018, -0.093]} />
+                <mesh name="Object_26007" geometry={nodes.Object_26007?.geometry} material={materials.robo_arm} position={[-0.358, -0.02, -0.093]} />
+                <mesh name="Object_26008" geometry={nodes.Object_26008?.geometry} material={materials.robo_arm} position={[-0.358, -0.019, -0.093]} />
+                <mesh name="Object_26009" geometry={nodes.Object_26009?.geometry} material={materials.robo_arm} position={[-0.358, 0.018, -0.093]} />
+                <mesh name="Object_26010" geometry={nodes.Object_26010?.geometry} material={materials.robo_arm} position={[-0.358, 0.02, -0.093]} />
+                <mesh name="Object_26011" geometry={nodes.Object_26011?.geometry} material={materials.robo_arm} position={[-0.358, 0.019, -0.093]} />
+              </group>
+              <group ref={setRef("roboarm013_low_12")} name="roboarm013_low_12" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_28" geometry={nodes.Object_28?.geometry} material={materials.robo_arm} position={[-0.398, -0.019, 0.095]} />
+                <mesh name="Object_28001" geometry={nodes.Object_28001?.geometry} material={materials.robo_arm} position={[-0.398, -0.02, 0.095]} />
+                <mesh name="Object_28002" geometry={nodes.Object_28002?.geometry} material={materials.robo_arm} position={[-0.398, -0.02, 0.095]} />
+                <mesh name="Object_28003" geometry={nodes.Object_28003?.geometry} material={materials.robo_arm} position={[-0.398, 0.019, 0.095]} />
+                <mesh name="Object_28004" geometry={nodes.Object_28004?.geometry} material={materials.robo_arm} position={[-0.398, 0.02, 0.095]} />
+                <mesh name="Object_28005" geometry={nodes.Object_28005?.geometry} material={materials.robo_arm} position={[-0.398, 0.02, 0.095]} />
+                <mesh name="Object_28006" geometry={nodes.Object_28006?.geometry} material={materials.robo_arm} position={[-0.398, -0.019, -0.073]} />
+                <mesh name="Object_28007" geometry={nodes.Object_28007?.geometry} material={materials.robo_arm} position={[-0.398, -0.02, -0.073]} />
+                <mesh name="Object_28008" geometry={nodes.Object_28008?.geometry} material={materials.robo_arm} position={[-0.398, -0.02, -0.073]} />
+                <mesh name="Object_28009" geometry={nodes.Object_28009?.geometry} material={materials.robo_arm} position={[-0.398, 0.019, -0.073]} />
+                <mesh name="Object_28010" geometry={nodes.Object_28010?.geometry} material={materials.robo_arm} position={[-0.398, 0.02, -0.073]} />
+                <mesh name="Object_28011" geometry={nodes.Object_28011?.geometry} material={materials.robo_arm} position={[-0.398, 0.02, -0.073]} />
+              </group>
+              <group ref={setRef("roboarm014_low_13")} name="roboarm014_low_13" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_30" geometry={nodes.Object_30?.geometry} material={materials.robo_arm} position={[-0.313, 0, 0.052]} />
+                <mesh name="Object_30001" geometry={nodes.Object_30001?.geometry} material={materials.robo_arm} position={[-0.361, -0.013, 0.088]} />
+                <mesh name="Object_30002" geometry={nodes.Object_30002?.geometry} material={materials.robo_arm} position={[-0.372, 0, 0.097]} />
+                <mesh name="Object_30003" geometry={nodes.Object_30003?.geometry} material={materials.robo_arm} position={[-0.341, 0, 0.097]} />
+                <mesh name="Object_30004" geometry={nodes.Object_30004?.geometry} material={materials.robo_arm} position={[-0.361, 0.013, 0.088]} />
+                <mesh name="Object_30005" geometry={nodes.Object_30005?.geometry} material={materials.robo_arm} position={[-0.38, 0, 0.079]} />
+                <mesh name="Object_30006" geometry={nodes.Object_30006?.geometry} material={materials.robo_arm} position={[-0.313, 0, -0.029]} />
+                <mesh name="Object_30007" geometry={nodes.Object_30007?.geometry} material={materials.robo_arm} position={[-0.361, -0.013, -0.066]} />
+                <mesh name="Object_30008" geometry={nodes.Object_30008?.geometry} material={materials.robo_arm} position={[-0.372, 0, -0.075]} />
+                <mesh name="Object_30009" geometry={nodes.Object_30009?.geometry} material={materials.robo_arm} position={[-0.341, 0, -0.075]} />
+                <mesh name="Object_30010" geometry={nodes.Object_30010?.geometry} material={materials.robo_arm} position={[-0.361, 0.013, -0.066]} />
+                <mesh name="Object_30011" geometry={nodes.Object_30011?.geometry} material={materials.robo_arm} position={[-0.38, 0, -0.057]} />
+              </group>
+              <group ref={setRef("roboarm015_low_14")} name="roboarm015_low_14" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_32" geometry={nodes.Object_32?.geometry} material={materials.robo_arm} position={[-0.437, 0, 0.102]} />
+                <mesh name="Object_32001" geometry={nodes.Object_32001?.geometry} material={materials.robo_arm} position={[-0.409, -0.009, 0.103]} />
+                <mesh name="Object_32002" geometry={nodes.Object_32002?.geometry} material={materials.robo_arm} position={[-0.409, -0.01, 0.102]} />
+                <mesh name="Object_32003" geometry={nodes.Object_32003?.geometry} material={materials.robo_arm} position={[-0.406, -0.009, 0.103]} />
+                <mesh name="Object_32004" geometry={nodes.Object_32004?.geometry} material={materials.robo_arm} position={[-0.437, 0, 0.099]} />
+                <mesh name="Object_32005" geometry={nodes.Object_32005?.geometry} material={materials.robo_arm} position={[-0.408, -0.004, 0.098]} />
+                <mesh name="Object_32006" geometry={nodes.Object_32006?.geometry} material={materials.robo_arm} position={[-0.406, -0.011, 0.091]} />
+                <mesh name="Object_32007" geometry={nodes.Object_32007?.geometry} material={materials.robo_arm} position={[-0.406, -0.01, 0.09]} />
+                <mesh name="Object_32008" geometry={nodes.Object_32008?.geometry} material={materials.robo_arm} position={[-0.405, -0.009, 0.086]} />
+                <mesh name="Object_32009" geometry={nodes.Object_32009?.geometry} material={materials.robo_arm} position={[-0.382, -0.009, 0.109]} />
+                <mesh name="Object_32010" geometry={nodes.Object_32010?.geometry} material={materials.robo_arm} position={[-0.392, -0.005, 0.103]} />
+                <mesh name="Object_32011" geometry={nodes.Object_32011?.geometry} material={materials.robo_arm} position={[-0.393, -0.008, 0.104]} />
+                <mesh name="Object_32012" geometry={nodes.Object_32012?.geometry} material={materials.robo_arm} position={[-0.393, -0.01, 0.104]} />
+                <mesh name="Object_32013" geometry={nodes.Object_32013?.geometry} material={materials.robo_arm} position={[-0.367, -0.008, 0.114]} />
+                <mesh name="Object_32014" geometry={nodes.Object_32014?.geometry} material={materials.robo_arm} position={[-0.369, -0.009, 0.113]} />
+                <mesh name="Object_32015" geometry={nodes.Object_32015?.geometry} material={materials.robo_arm} position={[-0.395, -0.006, 0.086]} />
+                <mesh name="Object_32016" geometry={nodes.Object_32016?.geometry} material={materials.robo_arm} position={[-0.404, -0.009, 0.087]} />
+                <mesh name="Object_32017" geometry={nodes.Object_32017?.geometry} material={materials.robo_arm} position={[-0.404, -0.009, 0.086]} />
+                <mesh name="Object_32018" geometry={nodes.Object_32018?.geometry} material={materials.robo_arm} position={[-0.407, -0.009, 0.084]} />
+                <mesh name="Object_32019" geometry={nodes.Object_32019?.geometry} material={materials.robo_arm} position={[-0.393, -0.002, 0.085]} />
+                <mesh name="Object_32020" geometry={nodes.Object_32020?.geometry} material={materials.robo_arm} position={[-0.402, -0.004, 0.084]} />
+                <mesh name="Object_32021" geometry={nodes.Object_32021?.geometry} material={materials.robo_arm} position={[-0.408, -0.009, 0.102]} />
+                <mesh name="Object_32022" geometry={nodes.Object_32022?.geometry} material={materials.robo_arm} position={[-0.409, -0.01, 0.102]} />
+                <mesh name="Object_32023" geometry={nodes.Object_32023?.geometry} material={materials.robo_arm} position={[-0.4, -0.009, 0.105]} />
+                <mesh name="Object_32024" geometry={nodes.Object_32024?.geometry} material={materials.robo_arm} position={[-0.409, -0.009, 0.099]} />
+                <mesh name="Object_32025" geometry={nodes.Object_32025?.geometry} material={materials.robo_arm} position={[-0.409, -0.012, 0.099]} />
+                <mesh name="Object_32026" geometry={nodes.Object_32026?.geometry} material={materials.robo_arm} position={[-0.409, -0.007, 0.099]} />
+                <mesh name="Object_32027" geometry={nodes.Object_32027?.geometry} material={materials.robo_arm} position={[-0.409, -0.015, 0.1]} />
+                <mesh name="Object_32028" geometry={nodes.Object_32028?.geometry} material={materials.robo_arm} position={[-0.408, -0.006, 0.097]} />
+                <mesh name="Object_32029" geometry={nodes.Object_32029?.geometry} material={materials.robo_arm} position={[-0.408, -0.005, 0.089]} />
+                <mesh name="Object_32030" geometry={nodes.Object_32030?.geometry} material={materials.robo_arm} position={[-0.398, -0.012, 0.095]} />
+                <mesh name="Object_32031" geometry={nodes.Object_32031?.geometry} material={materials.robo_arm} position={[-0.393, -0.009, 0.105]} />
+                <mesh name="Object_32032" geometry={nodes.Object_32032?.geometry} material={materials.robo_arm} position={[-0.381, -0.005, 0.108]} />
+                <mesh name="Object_32033" geometry={nodes.Object_32033?.geometry} material={materials.robo_arm} position={[-0.398, -0.011, 0.104]} />
+                <mesh name="Object_32034" geometry={nodes.Object_32034?.geometry} material={materials.robo_arm} position={[-0.387, -0.005, 0.11]} />
+                <mesh name="Object_32035" geometry={nodes.Object_32035?.geometry} material={materials.robo_arm} position={[-0.368, -0.008, 0.111]} />
+                <mesh name="Object_32036" geometry={nodes.Object_32036?.geometry} material={materials.robo_arm} position={[-0.407, -0.009, 0.084]} />
+                <mesh name="Object_32037" geometry={nodes.Object_32037?.geometry} material={materials.robo_arm} position={[-0.396, -0.011, 0.087]} />
+                <mesh name="Object_32038" geometry={nodes.Object_32038?.geometry} material={materials.robo_arm} position={[-0.421, -0.003, 0.102]} />
+                <mesh name="Object_32039" geometry={nodes.Object_32039?.geometry} material={materials.robo_arm} position={[-0.389, -0.005, 0.096]} />
+                <mesh name="Object_32040" geometry={nodes.Object_32040?.geometry} material={materials.robo_arm} position={[-0.389, -0.011, 0.096]} />
+                <mesh name="Object_32041" geometry={nodes.Object_32041?.geometry} material={materials.robo_arm} position={[-0.39, -0.014, 0.096]} />
+                <mesh name="Object_32042" geometry={nodes.Object_32042?.geometry} material={materials.robo_arm} position={[-0.398, -0.014, 0.103]} />
+                <mesh name="Object_32043" geometry={nodes.Object_32043?.geometry} material={materials.robo_arm} position={[-0.397, -0.014, 0.088]} />
+                <mesh name="Object_32044" geometry={nodes.Object_32044?.geometry} material={materials.robo_arm} position={[-0.405, -0.014, 0.092]} />
+                <mesh name="Object_32045" geometry={nodes.Object_32045?.geometry} material={materials.robo_arm} position={[-0.406, -0.014, 0.098]} />
+                <mesh name="Object_32046" geometry={nodes.Object_32046?.geometry} material={materials.robo_arm} position={[-0.407, -0.011, 0.099]} />
+                <mesh name="Object_32047" geometry={nodes.Object_32047?.geometry} material={materials.robo_arm} position={[-0.364, -0.009, 0.107]} />
+                <mesh name="Object_32048" geometry={nodes.Object_32048?.geometry} material={materials.robo_arm} position={[-0.356, -0.009, 0.106]} />
+                <mesh name="Object_32049" geometry={nodes.Object_32049?.geometry} material={materials.robo_arm} position={[-0.359, -0.009, 0.124]} />
+                <mesh name="Object_32050" geometry={nodes.Object_32050?.geometry} material={materials.robo_arm} position={[-0.407, -0.009, 0.104]} />
+                <mesh name="Object_32051" geometry={nodes.Object_32051?.geometry} material={materials.robo_arm} position={[-0.41, -0.02, 0.099]} />
+                <mesh name="Object_32052" geometry={nodes.Object_32052?.geometry} material={materials.robo_arm} position={[-0.436, -0.022, 0.1]} />
+                <mesh name="Object_32053" geometry={nodes.Object_32053?.geometry} material={materials.robo_arm} position={[-0.433, -0.022, 0.099]} />
+                <mesh name="Object_32054" geometry={nodes.Object_32054?.geometry} material={materials.robo_arm} position={[-0.424, -0.004, 0.101]} />
+                <mesh name="Object_32055" geometry={nodes.Object_32055?.geometry} material={materials.robo_arm} position={[-0.423, -0.004, 0.1]} />
+                <mesh name="Object_32056" geometry={nodes.Object_32056?.geometry} material={materials.robo_arm} position={[-0.427, 0, 0.099]} />
+                <mesh name="Object_32057" geometry={nodes.Object_32057?.geometry} material={materials.robo_arm} position={[-0.419, -0.002, 0.1]} />
+                <mesh name="Object_32058" geometry={nodes.Object_32058?.geometry} material={materials.robo_arm} position={[-0.428, 0, 0.101]} />
+                <mesh name="Object_32059" geometry={nodes.Object_32059?.geometry} material={materials.robo_arm} position={[-0.428, 0, 0.1]} />
+                <mesh name="Object_32060" geometry={nodes.Object_32060?.geometry} material={materials.robo_arm} position={[-0.454, 0, 0.101]} />
+                <mesh name="Object_32061" geometry={nodes.Object_32061?.geometry} material={materials.robo_arm} position={[-0.453, 0, 0.1]} />
+                <mesh name="Object_32062" geometry={nodes.Object_32062?.geometry} material={materials.robo_arm} position={[-0.392, -0.004, 0.104]} />
+                <mesh name="Object_32063" geometry={nodes.Object_32063?.geometry} material={materials.robo_arm} position={[-0.392, 0, 0.104]} />
+                <mesh name="Object_32064" geometry={nodes.Object_32064?.geometry} material={materials.robo_arm} position={[-0.419, 0, 0.101]} />
+                <mesh name="Object_32065" geometry={nodes.Object_32065?.geometry} material={materials.robo_arm} position={[-0.419, -0.001, 0.099]} />
+                <mesh name="Object_32066" geometry={nodes.Object_32066?.geometry} material={materials.robo_arm} position={[-0.444, -0.002, 0.1]} />
+                <mesh name="Object_32067" geometry={nodes.Object_32067?.geometry} material={materials.robo_arm} position={[-0.449, -0.004, 0.1]} />
+                <mesh name="Object_32068" geometry={nodes.Object_32068?.geometry} material={materials.robo_arm} position={[-0.444, 0, 0.099]} />
+                <mesh name="Object_32069" geometry={nodes.Object_32069?.geometry} material={materials.robo_arm} position={[-0.466, 0, 0.1]} />
+                <mesh name="Object_32070" geometry={nodes.Object_32070?.geometry} material={materials.robo_arm} position={[-0.467, 0, 0.099]} />
+                <mesh name="Object_32071" geometry={nodes.Object_32071?.geometry} material={materials.robo_arm} position={[-0.349, -0.009, 0.116]} />
+                <mesh name="Object_32072" geometry={nodes.Object_32072?.geometry} material={materials.robo_arm} position={[-0.358, -0.017, 0.115]} />
+                <mesh name="Object_32073" geometry={nodes.Object_32073?.geometry} material={materials.robo_arm} position={[-0.366, -0.017, 0.111]} />
+                <mesh name="Object_32074" geometry={nodes.Object_32074?.geometry} material={materials.robo_arm} position={[-0.398, -0.017, 0.095]} />
+                <mesh name="Object_32075" geometry={nodes.Object_32075?.geometry} material={materials.robo_arm} position={[-0.409, 0.009, 0.103]} />
+                <mesh name="Object_32076" geometry={nodes.Object_32076?.geometry} material={materials.robo_arm} position={[-0.409, 0.01, 0.102]} />
+                <mesh name="Object_32077" geometry={nodes.Object_32077?.geometry} material={materials.robo_arm} position={[-0.406, 0.009, 0.103]} />
+                <mesh name="Object_32078" geometry={nodes.Object_32078?.geometry} material={materials.robo_arm} position={[-0.408, 0.004, 0.098]} />
+                <mesh name="Object_32079" geometry={nodes.Object_32079?.geometry} material={materials.robo_arm} position={[-0.406, 0.011, 0.091]} />
+                <mesh name="Object_32080" geometry={nodes.Object_32080?.geometry} material={materials.robo_arm} position={[-0.406, 0.01, 0.09]} />
+                <mesh name="Object_32081" geometry={nodes.Object_32081?.geometry} material={materials.robo_arm} position={[-0.405, 0.009, 0.086]} />
+                <mesh name="Object_32082" geometry={nodes.Object_32082?.geometry} material={materials.robo_arm} position={[-0.382, 0.009, 0.109]} />
+                <mesh name="Object_32083" geometry={nodes.Object_32083?.geometry} material={materials.robo_arm} position={[-0.393, 0.008, 0.104]} />
+                <mesh name="Object_32084" geometry={nodes.Object_32084?.geometry} material={materials.robo_arm} position={[-0.392, 0.005, 0.103]} />
+                <mesh name="Object_32085" geometry={nodes.Object_32085?.geometry} material={materials.robo_arm} position={[-0.393, 0.01, 0.104]} />
+                <mesh name="Object_32086" geometry={nodes.Object_32086?.geometry} material={materials.robo_arm} position={[-0.369, 0.009, 0.113]} />
+                <mesh name="Object_32087" geometry={nodes.Object_32087?.geometry} material={materials.robo_arm} position={[-0.367, 0.008, 0.114]} />
+                <mesh name="Object_32088" geometry={nodes.Object_32088?.geometry} material={materials.robo_arm} position={[-0.395, 0.006, 0.086]} />
+                <mesh name="Object_32089" geometry={nodes.Object_32089?.geometry} material={materials.robo_arm} position={[-0.404, 0.009, 0.087]} />
+                <mesh name="Object_32090" geometry={nodes.Object_32090?.geometry} material={materials.robo_arm} position={[-0.404, 0.009, 0.086]} />
+                <mesh name="Object_32091" geometry={nodes.Object_32091?.geometry} material={materials.robo_arm} position={[-0.407, 0.009, 0.084]} />
+                <mesh name="Object_32092" geometry={nodes.Object_32092?.geometry} material={materials.robo_arm} position={[-0.393, 0.002, 0.085]} />
+                <mesh name="Object_32093" geometry={nodes.Object_32093?.geometry} material={materials.robo_arm} position={[-0.402, 0.004, 0.084]} />
+                <mesh name="Object_32094" geometry={nodes.Object_32094?.geometry} material={materials.robo_arm} position={[-0.408, 0.009, 0.102]} />
+                <mesh name="Object_32095" geometry={nodes.Object_32095?.geometry} material={materials.robo_arm} position={[-0.409, 0.01, 0.102]} />
+                <mesh name="Object_32096" geometry={nodes.Object_32096?.geometry} material={materials.robo_arm} position={[-0.4, 0.009, 0.105]} />
+                <mesh name="Object_32097" geometry={nodes.Object_32097?.geometry} material={materials.robo_arm} position={[-0.409, 0.009, 0.099]} />
+                <mesh name="Object_32098" geometry={nodes.Object_32098?.geometry} material={materials.robo_arm} position={[-0.409, 0.012, 0.099]} />
+                <mesh name="Object_32099" geometry={nodes.Object_32099?.geometry} material={materials.robo_arm} position={[-0.409, 0.007, 0.099]} />
+                <mesh name="Object_32100" geometry={nodes.Object_32100?.geometry} material={materials.robo_arm} position={[-0.409, 0.015, 0.1]} />
+                <mesh name="Object_32101" geometry={nodes.Object_32101?.geometry} material={materials.robo_arm} position={[-0.408, 0.006, 0.097]} />
+                <mesh name="Object_32102" geometry={nodes.Object_32102?.geometry} material={materials.robo_arm} position={[-0.408, 0.005, 0.089]} />
+                <mesh name="Object_32103" geometry={nodes.Object_32103?.geometry} material={materials.robo_arm} position={[-0.398, 0.012, 0.095]} />
+                <mesh name="Object_32104" geometry={nodes.Object_32104?.geometry} material={materials.robo_arm} position={[-0.393, 0.009, 0.105]} />
+                <mesh name="Object_32105" geometry={nodes.Object_32105?.geometry} material={materials.robo_arm} position={[-0.381, 0.005, 0.108]} />
+                <mesh name="Object_32106" geometry={nodes.Object_32106?.geometry} material={materials.robo_arm} position={[-0.398, 0.011, 0.104]} />
+                <mesh name="Object_32107" geometry={nodes.Object_32107?.geometry} material={materials.robo_arm} position={[-0.387, 0.005, 0.11]} />
+                <mesh name="Object_32108" geometry={nodes.Object_32108?.geometry} material={materials.robo_arm} position={[-0.368, 0.008, 0.111]} />
+                <mesh name="Object_32109" geometry={nodes.Object_32109?.geometry} material={materials.robo_arm} position={[-0.407, 0.009, 0.084]} />
+                <mesh name="Object_32110" geometry={nodes.Object_32110?.geometry} material={materials.robo_arm} position={[-0.396, 0.011, 0.087]} />
+                <mesh name="Object_32111" geometry={nodes.Object_32111?.geometry} material={materials.robo_arm} position={[-0.421, 0.003, 0.102]} />
+                <mesh name="Object_32112" geometry={nodes.Object_32112?.geometry} material={materials.robo_arm} position={[-0.389, 0.005, 0.096]} />
+                <mesh name="Object_32113" geometry={nodes.Object_32113?.geometry} material={materials.robo_arm} position={[-0.389, 0.011, 0.096]} />
+                <mesh name="Object_32114" geometry={nodes.Object_32114?.geometry} material={materials.robo_arm} position={[-0.39, 0.014, 0.096]} />
+                <mesh name="Object_32115" geometry={nodes.Object_32115?.geometry} material={materials.robo_arm} position={[-0.398, 0.014, 0.103]} />
+                <mesh name="Object_32116" geometry={nodes.Object_32116?.geometry} material={materials.robo_arm} position={[-0.397, 0.014, 0.088]} />
+                <mesh name="Object_32117" geometry={nodes.Object_32117?.geometry} material={materials.robo_arm} position={[-0.405, 0.014, 0.092]} />
+                <mesh name="Object_32118" geometry={nodes.Object_32118?.geometry} material={materials.robo_arm} position={[-0.406, 0.014, 0.098]} />
+                <mesh name="Object_32119" geometry={nodes.Object_32119?.geometry} material={materials.robo_arm} position={[-0.407, 0.011, 0.099]} />
+                <mesh name="Object_32120" geometry={nodes.Object_32120?.geometry} material={materials.robo_arm} position={[-0.364, 0.009, 0.107]} />
+                <mesh name="Object_32121" geometry={nodes.Object_32121?.geometry} material={materials.robo_arm} position={[-0.356, 0.009, 0.106]} />
+                <mesh name="Object_32122" geometry={nodes.Object_32122?.geometry} material={materials.robo_arm} position={[-0.359, 0.009, 0.124]} />
+                <mesh name="Object_32123" geometry={nodes.Object_32123?.geometry} material={materials.robo_arm} position={[-0.407, 0.009, 0.104]} />
+                <mesh name="Object_32124" geometry={nodes.Object_32124?.geometry} material={materials.robo_arm} position={[-0.41, 0.02, 0.099]} />
+                <mesh name="Object_32125" geometry={nodes.Object_32125?.geometry} material={materials.robo_arm} position={[-0.436, 0.022, 0.1]} />
+                <mesh name="Object_32126" geometry={nodes.Object_32126?.geometry} material={materials.robo_arm} position={[-0.433, 0.022, 0.099]} />
+                <mesh name="Object_32127" geometry={nodes.Object_32127?.geometry} material={materials.robo_arm} position={[-0.424, 0.004, 0.101]} />
+                <mesh name="Object_32128" geometry={nodes.Object_32128?.geometry} material={materials.robo_arm} position={[-0.423, 0.004, 0.1]} />
+                <mesh name="Object_32129" geometry={nodes.Object_32129?.geometry} material={materials.robo_arm} position={[-0.419, 0.002, 0.1]} />
+                <mesh name="Object_32130" geometry={nodes.Object_32130?.geometry} material={materials.robo_arm} position={[-0.392, 0.004, 0.104]} />
+                <mesh name="Object_32131" geometry={nodes.Object_32131?.geometry} material={materials.robo_arm} position={[-0.392, 0, 0.104]} />
+                <mesh name="Object_32132" geometry={nodes.Object_32132?.geometry} material={materials.robo_arm} position={[-0.419, 0, 0.101]} />
+                <mesh name="Object_32133" geometry={nodes.Object_32133?.geometry} material={materials.robo_arm} position={[-0.419, 0.001, 0.099]} />
+                <mesh name="Object_32134" geometry={nodes.Object_32134?.geometry} material={materials.robo_arm} position={[-0.444, 0.002, 0.1]} />
+                <mesh name="Object_32135" geometry={nodes.Object_32135?.geometry} material={materials.robo_arm} position={[-0.449, 0.004, 0.1]} />
+                <mesh name="Object_32136" geometry={nodes.Object_32136?.geometry} material={materials.robo_arm} position={[-0.349, 0.009, 0.116]} />
+                <mesh name="Object_32137" geometry={nodes.Object_32137?.geometry} material={materials.robo_arm} position={[-0.358, 0.017, 0.115]} />
+                <mesh name="Object_32138" geometry={nodes.Object_32138?.geometry} material={materials.robo_arm} position={[-0.366, 0.017, 0.111]} />
+                <mesh name="Object_32139" geometry={nodes.Object_32139?.geometry} material={materials.robo_arm} position={[-0.398, 0.017, 0.095]} />
+                <mesh name="Object_32140" geometry={nodes.Object_32140?.geometry} material={materials.robo_arm} position={[-0.437, 0, -0.08]} />
+                <mesh name="Object_32141" geometry={nodes.Object_32141?.geometry} material={materials.robo_arm} position={[-0.409, -0.009, -0.081]} />
+                <mesh name="Object_32142" geometry={nodes.Object_32142?.geometry} material={materials.robo_arm} position={[-0.409, -0.01, -0.08]} />
+                <mesh name="Object_32143" geometry={nodes.Object_32143?.geometry} material={materials.robo_arm} position={[-0.406, -0.009, -0.08]} />
+                <mesh name="Object_32144" geometry={nodes.Object_32144?.geometry} material={materials.robo_arm} position={[-0.437, 0, -0.076]} />
+                <mesh name="Object_32145" geometry={nodes.Object_32145?.geometry} material={materials.robo_arm} position={[-0.408, -0.004, -0.076]} />
+                <mesh name="Object_32146" geometry={nodes.Object_32146?.geometry} material={materials.robo_arm} position={[-0.406, -0.01, -0.068]} />
+                <mesh name="Object_32147" geometry={nodes.Object_32147?.geometry} material={materials.robo_arm} position={[-0.406, -0.011, -0.068]} />
+                <mesh name="Object_32148" geometry={nodes.Object_32148?.geometry} material={materials.robo_arm} position={[-0.405, -0.009, -0.064]} />
+                <mesh name="Object_32149" geometry={nodes.Object_32149?.geometry} material={materials.robo_arm} position={[-0.382, -0.009, -0.087]} />
+                <mesh name="Object_32150" geometry={nodes.Object_32150?.geometry} material={materials.robo_arm} position={[-0.393, -0.01, -0.082]} />
+                <mesh name="Object_32151" geometry={nodes.Object_32151?.geometry} material={materials.robo_arm} position={[-0.393, -0.008, -0.082]} />
+                <mesh name="Object_32152" geometry={nodes.Object_32152?.geometry} material={materials.robo_arm} position={[-0.392, -0.005, -0.081]} />
+                <mesh name="Object_32153" geometry={nodes.Object_32153?.geometry} material={materials.robo_arm} position={[-0.369, -0.009, -0.09]} />
+                <mesh name="Object_32154" geometry={nodes.Object_32154?.geometry} material={materials.robo_arm} position={[-0.367, -0.008, -0.092]} />
+                <mesh name="Object_32155" geometry={nodes.Object_32155?.geometry} material={materials.robo_arm} position={[-0.404, -0.009, -0.064]} />
+                <mesh name="Object_32156" geometry={nodes.Object_32156?.geometry} material={materials.robo_arm} position={[-0.395, -0.006, -0.064]} />
+                <mesh name="Object_32157" geometry={nodes.Object_32157?.geometry} material={materials.robo_arm} position={[-0.404, -0.009, -0.064]} />
+                <mesh name="Object_32158" geometry={nodes.Object_32158?.geometry} material={materials.robo_arm} position={[-0.407, -0.009, -0.062]} />
+                <mesh name="Object_32159" geometry={nodes.Object_32159?.geometry} material={materials.robo_arm} position={[-0.393, -0.002, -0.063]} />
+                <mesh name="Object_32160" geometry={nodes.Object_32160?.geometry} material={materials.robo_arm} position={[-0.402, -0.004, -0.061]} />
+                <mesh name="Object_32161" geometry={nodes.Object_32161?.geometry} material={materials.robo_arm} position={[-0.408, -0.009, -0.079]} />
+                <mesh name="Object_32162" geometry={nodes.Object_32162?.geometry} material={materials.robo_arm} position={[-0.409, -0.01, -0.08]} />
+                <mesh name="Object_32163" geometry={nodes.Object_32163?.geometry} material={materials.robo_arm} position={[-0.4, -0.009, -0.083]} />
+                <mesh name="Object_32164" geometry={nodes.Object_32164?.geometry} material={materials.robo_arm} position={[-0.409, -0.009, -0.077]} />
+                <mesh name="Object_32165" geometry={nodes.Object_32165?.geometry} material={materials.robo_arm} position={[-0.409, -0.012, -0.077]} />
+                <mesh name="Object_32166" geometry={nodes.Object_32166?.geometry} material={materials.robo_arm} position={[-0.409, -0.007, -0.076]} />
+                <mesh name="Object_32167" geometry={nodes.Object_32167?.geometry} material={materials.robo_arm} position={[-0.409, -0.015, -0.078]} />
+                <mesh name="Object_32168" geometry={nodes.Object_32168?.geometry} material={materials.robo_arm} position={[-0.408, -0.006, -0.075]} />
+                <mesh name="Object_32169" geometry={nodes.Object_32169?.geometry} material={materials.robo_arm} position={[-0.408, -0.005, -0.067]} />
+                <mesh name="Object_32170" geometry={nodes.Object_32170?.geometry} material={materials.robo_arm} position={[-0.398, -0.012, -0.073]} />
+                <mesh name="Object_32171" geometry={nodes.Object_32171?.geometry} material={materials.robo_arm} position={[-0.393, -0.009, -0.083]} />
+                <mesh name="Object_32172" geometry={nodes.Object_32172?.geometry} material={materials.robo_arm} position={[-0.381, -0.005, -0.085]} />
+                <mesh name="Object_32173" geometry={nodes.Object_32173?.geometry} material={materials.robo_arm} position={[-0.398, -0.011, -0.081]} />
+                <mesh name="Object_32174" geometry={nodes.Object_32174?.geometry} material={materials.robo_arm} position={[-0.387, -0.005, -0.088]} />
+                <mesh name="Object_32175" geometry={nodes.Object_32175?.geometry} material={materials.robo_arm} position={[-0.368, -0.008, -0.088]} />
+                <mesh name="Object_32176" geometry={nodes.Object_32176?.geometry} material={materials.robo_arm} position={[-0.407, -0.009, -0.062]} />
+                <mesh name="Object_32177" geometry={nodes.Object_32177?.geometry} material={materials.robo_arm} position={[-0.396, -0.011, -0.064]} />
+                <mesh name="Object_32178" geometry={nodes.Object_32178?.geometry} material={materials.robo_arm} position={[-0.421, -0.003, -0.079]} />
+                <mesh name="Object_32179" geometry={nodes.Object_32179?.geometry} material={materials.robo_arm} position={[-0.389, -0.005, -0.074]} />
+                <mesh name="Object_32180" geometry={nodes.Object_32180?.geometry} material={materials.robo_arm} position={[-0.389, -0.011, -0.074]} />
+                <mesh name="Object_32181" geometry={nodes.Object_32181?.geometry} material={materials.robo_arm} position={[-0.39, -0.014, -0.074]} />
+                <mesh name="Object_32182" geometry={nodes.Object_32182?.geometry} material={materials.robo_arm} position={[-0.398, -0.014, -0.08]} />
+                <mesh name="Object_32183" geometry={nodes.Object_32183?.geometry} material={materials.robo_arm} position={[-0.397, -0.014, -0.065]} />
+                <mesh name="Object_32184" geometry={nodes.Object_32184?.geometry} material={materials.robo_arm} position={[-0.405, -0.014, -0.069]} />
+                <mesh name="Object_32185" geometry={nodes.Object_32185?.geometry} material={materials.robo_arm} position={[-0.406, -0.014, -0.076]} />
+                <mesh name="Object_32186" geometry={nodes.Object_32186?.geometry} material={materials.robo_arm} position={[-0.407, -0.011, -0.076]} />
+                <mesh name="Object_32187" geometry={nodes.Object_32187?.geometry} material={materials.robo_arm} position={[-0.364, -0.009, -0.084]} />
+                <mesh name="Object_32188" geometry={nodes.Object_32188?.geometry} material={materials.robo_arm} position={[-0.356, -0.009, -0.084]} />
+                <mesh name="Object_32189" geometry={nodes.Object_32189?.geometry} material={materials.robo_arm} position={[-0.359, -0.009, -0.101]} />
+                <mesh name="Object_32190" geometry={nodes.Object_32190?.geometry} material={materials.robo_arm} position={[-0.407, -0.009, -0.082]} />
+                <mesh name="Object_32191" geometry={nodes.Object_32191?.geometry} material={materials.robo_arm} position={[-0.41, -0.02, -0.077]} />
+                <mesh name="Object_32192" geometry={nodes.Object_32192?.geometry} material={materials.robo_arm} position={[-0.436, -0.022, -0.078]} />
+                <mesh name="Object_32193" geometry={nodes.Object_32193?.geometry} material={materials.robo_arm} position={[-0.433, -0.022, -0.077]} />
+                <mesh name="Object_32194" geometry={nodes.Object_32194?.geometry} material={materials.robo_arm} position={[-0.424, -0.004, -0.079]} />
+                <mesh name="Object_32195" geometry={nodes.Object_32195?.geometry} material={materials.robo_arm} position={[-0.423, -0.004, -0.078]} />
+                <mesh name="Object_32196" geometry={nodes.Object_32196?.geometry} material={materials.robo_arm} position={[-0.427, 0, -0.077]} />
+                <mesh name="Object_32197" geometry={nodes.Object_32197?.geometry} material={materials.robo_arm} position={[-0.419, -0.002, -0.078]} />
+                <mesh name="Object_32198" geometry={nodes.Object_32198?.geometry} material={materials.robo_arm} position={[-0.428, 0, -0.079]} />
+                <mesh name="Object_32199" geometry={nodes.Object_32199?.geometry} material={materials.robo_arm} position={[-0.428, 0, -0.077]} />
+                <mesh name="Object_32200" geometry={nodes.Object_32200?.geometry} material={materials.robo_arm} position={[-0.454, 0, -0.079]} />
+                <mesh name="Object_32201" geometry={nodes.Object_32201?.geometry} material={materials.robo_arm} position={[-0.453, 0, -0.078]} />
+                <mesh name="Object_32202" geometry={nodes.Object_32202?.geometry} material={materials.robo_arm} position={[-0.392, -0.004, -0.082]} />
+                <mesh name="Object_32203" geometry={nodes.Object_32203?.geometry} material={materials.robo_arm} position={[-0.392, 0, -0.082]} />
+                <mesh name="Object_32204" geometry={nodes.Object_32204?.geometry} material={materials.robo_arm} position={[-0.419, 0, -0.079]} />
+                <mesh name="Object_32205" geometry={nodes.Object_32205?.geometry} material={materials.robo_arm} position={[-0.419, -0.001, -0.077]} />
+                <mesh name="Object_32206" geometry={nodes.Object_32206?.geometry} material={materials.robo_arm} position={[-0.444, -0.002, -0.078]} />
+                <mesh name="Object_32207" geometry={nodes.Object_32207?.geometry} material={materials.robo_arm} position={[-0.449, -0.004, -0.078]} />
+                <mesh name="Object_32208" geometry={nodes.Object_32208?.geometry} material={materials.robo_arm} position={[-0.444, 0, -0.077]} />
+                <mesh name="Object_32209" geometry={nodes.Object_32209?.geometry} material={materials.robo_arm} position={[-0.466, 0, -0.078]} />
+                <mesh name="Object_32210" geometry={nodes.Object_32210?.geometry} material={materials.robo_arm} position={[-0.467, 0, -0.077]} />
+                <mesh name="Object_32211" geometry={nodes.Object_32211?.geometry} material={materials.robo_arm} position={[-0.349, -0.009, -0.093]} />
+                <mesh name="Object_32212" geometry={nodes.Object_32212?.geometry} material={materials.robo_arm} position={[-0.358, -0.017, -0.092]} />
+                <mesh name="Object_32213" geometry={nodes.Object_32213?.geometry} material={materials.robo_arm} position={[-0.366, -0.017, -0.088]} />
+                <mesh name="Object_32214" geometry={nodes.Object_32214?.geometry} material={materials.robo_arm} position={[-0.398, -0.017, -0.073]} />
+                <mesh name="Object_32215" geometry={nodes.Object_32215?.geometry} material={materials.robo_arm} position={[-0.409, 0.01, -0.08]} />
+                <mesh name="Object_32216" geometry={nodes.Object_32216?.geometry} material={materials.robo_arm} position={[-0.409, 0.009, -0.081]} />
+                <mesh name="Object_32217" geometry={nodes.Object_32217?.geometry} material={materials.robo_arm} position={[-0.406, 0.009, -0.08]} />
+                <mesh name="Object_32218" geometry={nodes.Object_32218?.geometry} material={materials.robo_arm} position={[-0.408, 0.004, -0.076]} />
+                <mesh name="Object_32219" geometry={nodes.Object_32219?.geometry} material={materials.robo_arm} position={[-0.406, 0.01, -0.068]} />
+                <mesh name="Object_32220" geometry={nodes.Object_32220?.geometry} material={materials.robo_arm} position={[-0.406, 0.011, -0.068]} />
+                <mesh name="Object_32221" geometry={nodes.Object_32221?.geometry} material={materials.robo_arm} position={[-0.405, 0.009, -0.064]} />
+                <mesh name="Object_32222" geometry={nodes.Object_32222?.geometry} material={materials.robo_arm} position={[-0.382, 0.009, -0.087]} />
+                <mesh name="Object_32223" geometry={nodes.Object_32223?.geometry} material={materials.robo_arm} position={[-0.393, 0.01, -0.082]} />
+                <mesh name="Object_32224" geometry={nodes.Object_32224?.geometry} material={materials.robo_arm} position={[-0.393, 0.008, -0.082]} />
+                <mesh name="Object_32225" geometry={nodes.Object_32225?.geometry} material={materials.robo_arm} position={[-0.392, 0.005, -0.081]} />
+                <mesh name="Object_32226" geometry={nodes.Object_32226?.geometry} material={materials.robo_arm} position={[-0.367, 0.008, -0.092]} />
+                <mesh name="Object_32227" geometry={nodes.Object_32227?.geometry} material={materials.robo_arm} position={[-0.369, 0.009, -0.09]} />
+                <mesh name="Object_32228" geometry={nodes.Object_32228?.geometry} material={materials.robo_arm} position={[-0.404, 0.009, -0.064]} />
+                <mesh name="Object_32229" geometry={nodes.Object_32229?.geometry} material={materials.robo_arm} position={[-0.395, 0.006, -0.064]} />
+                <mesh name="Object_32230" geometry={nodes.Object_32230?.geometry} material={materials.robo_arm} position={[-0.404, 0.009, -0.064]} />
+                <mesh name="Object_32231" geometry={nodes.Object_32231?.geometry} material={materials.robo_arm} position={[-0.407, 0.009, -0.062]} />
+                <mesh name="Object_32232" geometry={nodes.Object_32232?.geometry} material={materials.robo_arm} position={[-0.393, 0.002, -0.063]} />
+                <mesh name="Object_32233" geometry={nodes.Object_32233?.geometry} material={materials.robo_arm} position={[-0.402, 0.004, -0.061]} />
+                <mesh name="Object_32234" geometry={nodes.Object_32234?.geometry} material={materials.robo_arm} position={[-0.408, 0.009, -0.079]} />
+                <mesh name="Object_32235" geometry={nodes.Object_32235?.geometry} material={materials.robo_arm} position={[-0.409, 0.01, -0.08]} />
+                <mesh name="Object_32236" geometry={nodes.Object_32236?.geometry} material={materials.robo_arm} position={[-0.4, 0.009, -0.083]} />
+                <mesh name="Object_32237" geometry={nodes.Object_32237?.geometry} material={materials.robo_arm} position={[-0.409, 0.009, -0.077]} />
+                <mesh name="Object_32238" geometry={nodes.Object_32238?.geometry} material={materials.robo_arm} position={[-0.409, 0.012, -0.077]} />
+                <mesh name="Object_32239" geometry={nodes.Object_32239?.geometry} material={materials.robo_arm} position={[-0.409, 0.007, -0.076]} />
+                <mesh name="Object_32240" geometry={nodes.Object_32240?.geometry} material={materials.robo_arm} position={[-0.409, 0.015, -0.078]} />
+                <mesh name="Object_32241" geometry={nodes.Object_32241?.geometry} material={materials.robo_arm} position={[-0.408, 0.006, -0.075]} />
+                <mesh name="Object_32242" geometry={nodes.Object_32242?.geometry} material={materials.robo_arm} position={[-0.408, 0.005, -0.067]} />
+                <mesh name="Object_32243" geometry={nodes.Object_32243?.geometry} material={materials.robo_arm} position={[-0.398, 0.012, -0.073]} />
+                <mesh name="Object_32244" geometry={nodes.Object_32244?.geometry} material={materials.robo_arm} position={[-0.393, 0.009, -0.083]} />
+                <mesh name="Object_32245" geometry={nodes.Object_32245?.geometry} material={materials.robo_arm} position={[-0.381, 0.005, -0.085]} />
+                <mesh name="Object_32246" geometry={nodes.Object_32246?.geometry} material={materials.robo_arm} position={[-0.398, 0.011, -0.081]} />
+                <mesh name="Object_32247" geometry={nodes.Object_32247?.geometry} material={materials.robo_arm} position={[-0.387, 0.005, -0.088]} />
+                <mesh name="Object_32248" geometry={nodes.Object_32248?.geometry} material={materials.robo_arm} position={[-0.368, 0.008, -0.088]} />
+                <mesh name="Object_32249" geometry={nodes.Object_32249?.geometry} material={materials.robo_arm} position={[-0.407, 0.009, -0.062]} />
+                <mesh name="Object_32250" geometry={nodes.Object_32250?.geometry} material={materials.robo_arm} position={[-0.396, 0.011, -0.064]} />
+                <mesh name="Object_32251" geometry={nodes.Object_32251?.geometry} material={materials.robo_arm} position={[-0.421, 0.003, -0.079]} />
+                <mesh name="Object_32252" geometry={nodes.Object_32252?.geometry} material={materials.robo_arm} position={[-0.389, 0.005, -0.074]} />
+                <mesh name="Object_32253" geometry={nodes.Object_32253?.geometry} material={materials.robo_arm} position={[-0.389, 0.011, -0.074]} />
+                <mesh name="Object_32254" geometry={nodes.Object_32254?.geometry} material={materials.robo_arm} position={[-0.39, 0.014, -0.074]} />
+                <mesh name="Object_32255" geometry={nodes.Object_32255?.geometry} material={materials.robo_arm} position={[-0.398, 0.014, -0.08]} />
+                <mesh name="Object_32256" geometry={nodes.Object_32256?.geometry} material={materials.robo_arm} position={[-0.397, 0.014, -0.065]} />
+                <mesh name="Object_32257" geometry={nodes.Object_32257?.geometry} material={materials.robo_arm} position={[-0.405, 0.014, -0.069]} />
+                <mesh name="Object_32258" geometry={nodes.Object_32258?.geometry} material={materials.robo_arm} position={[-0.406, 0.014, -0.076]} />
+                <mesh name="Object_32259" geometry={nodes.Object_32259?.geometry} material={materials.robo_arm} position={[-0.407, 0.011, -0.076]} />
+                <mesh name="Object_32260" geometry={nodes.Object_32260?.geometry} material={materials.robo_arm} position={[-0.364, 0.009, -0.084]} />
+                <mesh name="Object_32261" geometry={nodes.Object_32261?.geometry} material={materials.robo_arm} position={[-0.356, 0.009, -0.084]} />
+                <mesh name="Object_32262" geometry={nodes.Object_32262?.geometry} material={materials.robo_arm} position={[-0.359, 0.009, -0.101]} />
+                <mesh name="Object_32263" geometry={nodes.Object_32263?.geometry} material={materials.robo_arm} position={[-0.407, 0.009, -0.082]} />
+                <mesh name="Object_32264" geometry={nodes.Object_32264?.geometry} material={materials.robo_arm} position={[-0.41, 0.02, -0.077]} />
+                <mesh name="Object_32265" geometry={nodes.Object_32265?.geometry} material={materials.robo_arm} position={[-0.436, 0.022, -0.078]} />
+                <mesh name="Object_32266" geometry={nodes.Object_32266?.geometry} material={materials.robo_arm} position={[-0.433, 0.022, -0.077]} />
+                <mesh name="Object_32267" geometry={nodes.Object_32267?.geometry} material={materials.robo_arm} position={[-0.424, 0.004, -0.079]} />
+                <mesh name="Object_32268" geometry={nodes.Object_32268?.geometry} material={materials.robo_arm} position={[-0.423, 0.004, -0.078]} />
+                <mesh name="Object_32269" geometry={nodes.Object_32269?.geometry} material={materials.robo_arm} position={[-0.419, 0.002, -0.078]} />
+                <mesh name="Object_32270" geometry={nodes.Object_32270?.geometry} material={materials.robo_arm} position={[-0.392, 0.004, -0.082]} />
+                <mesh name="Object_32271" geometry={nodes.Object_32271?.geometry} material={materials.robo_arm} position={[-0.392, 0, -0.082]} />
+                <mesh name="Object_32272" geometry={nodes.Object_32272?.geometry} material={materials.robo_arm} position={[-0.419, 0, -0.079]} />
+                <mesh name="Object_32273" geometry={nodes.Object_32273?.geometry} material={materials.robo_arm} position={[-0.419, 0.001, -0.077]} />
+                <mesh name="Object_32274" geometry={nodes.Object_32274?.geometry} material={materials.robo_arm} position={[-0.444, 0.002, -0.078]} />
+                <mesh name="Object_32275" geometry={nodes.Object_32275?.geometry} material={materials.robo_arm} position={[-0.449, 0.004, -0.078]} />
+                <mesh name="Object_32276" geometry={nodes.Object_32276?.geometry} material={materials.robo_arm} position={[-0.349, 0.009, -0.093]} />
+                <mesh name="Object_32277" geometry={nodes.Object_32277?.geometry} material={materials.robo_arm} position={[-0.358, 0.017, -0.092]} />
+                <mesh name="Object_32278" geometry={nodes.Object_32278?.geometry} material={materials.robo_arm} position={[-0.366, 0.017, -0.088]} />
+                <mesh name="Object_32279" geometry={nodes.Object_32279?.geometry} material={materials.robo_arm} position={[-0.398, 0.017, -0.073]} />
+                <mesh name="Object_32280" geometry={nodes.Object_32280?.geometry} material={materials.robo_arm} position={[-0.408, -0.009, 0.099]} />
+                <mesh name="Object_32281" geometry={nodes.Object_32281?.geometry} material={materials.robo_arm} position={[-0.408, 0.009, 0.099]} />
+                <mesh name="Object_32282" geometry={nodes.Object_32282?.geometry} material={materials.robo_arm} position={[-0.408, -0.009, -0.076]} />
+                <mesh name="Object_32283" geometry={nodes.Object_32283?.geometry} material={materials.robo_arm} position={[-0.408, 0.009, -0.076]} />
+              </group>
+              <group ref={setRef("roboarm016_low_15")} name="roboarm016_low_15" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_34" geometry={nodes.Object_34?.geometry} material={materials.robo_arm} position={[-0.289, 0.022, 0.011]} />
+                <mesh name="Object_34001" geometry={nodes.Object_34001?.geometry} material={materials.robo_arm} position={[-0.258, 0, -0.046]} />
+                <mesh name="Object_34002" geometry={nodes.Object_34002?.geometry} material={materials.robo_arm} position={[-0.258, 0, 0.069]} />
+                <mesh name="Object_34003" geometry={nodes.Object_34003?.geometry} material={materials.robo_arm} position={[-0.289, -0.022, 0.011]} />
+                <mesh name="Object_34004" geometry={nodes.Object_34004?.geometry} material={materials.robo_arm} position={[-0.293, 0, 0.011]} />
+                <mesh name="Object_34005" geometry={nodes.Object_34005?.geometry} material={materials.robo_arm} position={[-0.298, -0.02, 0.011]} />
+                <mesh name="Object_34006" geometry={nodes.Object_34006?.geometry} material={materials.robo_arm} position={[-0.298, 0.02, 0.011]} />
+                <mesh name="Object_34007" geometry={nodes.Object_34007?.geometry} material={materials.robo_arm} position={[-0.277, 0, 0.011]} />
+              </group>
+              <group ref={setRef("roboarm017_low_16")} name="roboarm017_low_16" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_36" geometry={nodes.Object_36?.geometry} material={materials.robo_arm} position={[-0.069, -0.055, 0.011]} />
+                <mesh name="Object_36001" geometry={nodes.Object_36001?.geometry} material={materials.robo_arm} position={[-0.063, -0.061, 0.011]} />
+                <mesh name="Object_36002" geometry={nodes.Object_36002?.geometry} material={materials.robo_arm} position={[-0.063, -0.055, 0.023]} />
+                <mesh name="Object_36003" geometry={nodes.Object_36003?.geometry} material={materials.robo_arm} position={[-0.057, -0.055, 0.011]} />
+                <mesh name="Object_36004" geometry={nodes.Object_36004?.geometry} material={materials.robo_arm} position={[-0.063, -0.055, -0.001]} />
+              </group>
+              <group ref={setRef("roboarm018_low_17")} name="roboarm018_low_17" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_38" geometry={nodes.Object_38?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.052]} />
+                <mesh name="Object_38001" geometry={nodes.Object_38001?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.055]} />
+                <mesh name="Object_38002" geometry={nodes.Object_38002?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.057]} />
+                <mesh name="Object_38003" geometry={nodes.Object_38003?.geometry} material={materials.robo_arm} position={[-0.023, 0, 0.05]} />
+                <mesh name="Object_38004" geometry={nodes.Object_38004?.geometry} material={materials.robo_arm} position={[-0.022, 0.003, 0.05]} />
+                <mesh name="Object_38005" geometry={nodes.Object_38005?.geometry} material={materials.robo_arm} position={[-0.021, 0.006, 0.05]} />
+                <mesh name="Object_38006" geometry={nodes.Object_38006?.geometry} material={materials.robo_arm} position={[-0.019, 0.008, 0.05]} />
+                <mesh name="Object_38007" geometry={nodes.Object_38007?.geometry} material={materials.robo_arm} position={[-0.017, 0.009, 0.05]} />
+                <mesh name="Object_38008" geometry={nodes.Object_38008?.geometry} material={materials.robo_arm} position={[-0.015, 0.009, 0.05]} />
+                <mesh name="Object_38009" geometry={nodes.Object_38009?.geometry} material={materials.robo_arm} position={[-0.013, 0.009, 0.05]} />
+                <mesh name="Object_38010" geometry={nodes.Object_38010?.geometry} material={materials.robo_arm} position={[-0.012, 0.009, 0.05]} />
+                <mesh name="Object_38011" geometry={nodes.Object_38011?.geometry} material={materials.robo_arm} position={[-0.01, 0.008, 0.05]} />
+                <mesh name="Object_38012" geometry={nodes.Object_38012?.geometry} material={materials.robo_arm} position={[-0.009, 0.007, 0.05]} />
+                <mesh name="Object_38013" geometry={nodes.Object_38013?.geometry} material={materials.robo_arm} position={[-0.007, 0.006, 0.05]} />
+                <mesh name="Object_38014" geometry={nodes.Object_38014?.geometry} material={materials.robo_arm} position={[-0.006, 0.005, 0.05]} />
+                <mesh name="Object_38015" geometry={nodes.Object_38015?.geometry} material={materials.robo_arm} position={[-0.006, 0.003, 0.05]} />
+                <mesh name="Object_38016" geometry={nodes.Object_38016?.geometry} material={materials.robo_arm} position={[-0.022, -0.002, 0.05]} />
+                <mesh name="Object_38017" geometry={nodes.Object_38017?.geometry} material={materials.robo_arm} position={[-0.005, 0.001, 0.05]} />
+                <mesh name="Object_38018" geometry={nodes.Object_38018?.geometry} material={materials.robo_arm} position={[-0.022, -0.004, 0.05]} />
+                <mesh name="Object_38019" geometry={nodes.Object_38019?.geometry} material={materials.robo_arm} position={[-0.005, 0, 0.05]} />
+                <mesh name="Object_38020" geometry={nodes.Object_38020?.geometry} material={materials.robo_arm} position={[-0.02, -0.006, 0.05]} />
+                <mesh name="Object_38021" geometry={nodes.Object_38021?.geometry} material={materials.robo_arm} position={[-0.006, -0.002, 0.05]} />
+                <mesh name="Object_38022" geometry={nodes.Object_38022?.geometry} material={materials.robo_arm} position={[-0.015, -0.008, 0.05]} />
+                <mesh name="Object_38023" geometry={nodes.Object_38023?.geometry} material={materials.robo_arm} position={[-0.017, -0.008, 0.05]} />
+                <mesh name="Object_38024" geometry={nodes.Object_38024?.geometry} material={materials.robo_arm} position={[-0.018, -0.007, 0.05]} />
+                <mesh name="Object_38025" geometry={nodes.Object_38025?.geometry} material={materials.robo_arm} position={[-0.006, -0.004, 0.05]} />
+                <mesh name="Object_38026" geometry={nodes.Object_38026?.geometry} material={materials.robo_arm} position={[-0.013, -0.008, 0.05]} />
+                <mesh name="Object_38027" geometry={nodes.Object_38027?.geometry} material={materials.robo_arm} position={[-0.012, -0.008, 0.05]} />
+                <mesh name="Object_38028" geometry={nodes.Object_38028?.geometry} material={materials.robo_arm} position={[-0.008, -0.006, 0.05]} />
+                <mesh name="Object_38029" geometry={nodes.Object_38029?.geometry} material={materials.robo_arm} position={[-0.01, -0.007, 0.05]} />
+                <mesh name="Object_38030" geometry={nodes.Object_38030?.geometry} material={materials.robo_arm} position={[-0.023, -0.023, 0.05]} />
+                <mesh name="Object_38031" geometry={nodes.Object_38031?.geometry} material={materials.robo_arm} position={[-0.023, -0.021, 0.05]} />
+                <mesh name="Object_38032" geometry={nodes.Object_38032?.geometry} material={materials.robo_arm} position={[-0.023, -0.019, 0.05]} />
+                <mesh name="Object_38033" geometry={nodes.Object_38033?.geometry} material={materials.robo_arm} position={[-0.022, -0.018, 0.05]} />
+                <mesh name="Object_38034" geometry={nodes.Object_38034?.geometry} material={materials.robo_arm} position={[-0.021, -0.016, 0.05]} />
+                <mesh name="Object_38035" geometry={nodes.Object_38035?.geometry} material={materials.robo_arm} position={[-0.019, -0.015, 0.05]} />
+                <mesh name="Object_38036" geometry={nodes.Object_38036?.geometry} material={materials.robo_arm} position={[-0.017, -0.014, 0.05]} />
+                <mesh name="Object_38037" geometry={nodes.Object_38037?.geometry} material={materials.robo_arm} position={[-0.015, -0.013, 0.05]} />
+                <mesh name="Object_38038" geometry={nodes.Object_38038?.geometry} material={materials.robo_arm} position={[-0.013, -0.013, 0.05]} />
+                <mesh name="Object_38039" geometry={nodes.Object_38039?.geometry} material={materials.robo_arm} position={[-0.012, -0.014, 0.05]} />
+                <mesh name="Object_38040" geometry={nodes.Object_38040?.geometry} material={materials.robo_arm} position={[-0.01, -0.014, 0.05]} />
+                <mesh name="Object_38041" geometry={nodes.Object_38041?.geometry} material={materials.robo_arm} position={[-0.009, -0.015, 0.05]} />
+                <mesh name="Object_38042" geometry={nodes.Object_38042?.geometry} material={materials.robo_arm} position={[-0.007, -0.017, 0.05]} />
+                <mesh name="Object_38043" geometry={nodes.Object_38043?.geometry} material={materials.robo_arm} position={[-0.006, -0.019, 0.05]} />
+                <mesh name="Object_38044" geometry={nodes.Object_38044?.geometry} material={materials.robo_arm} position={[-0.023, -0.024, 0.05]} />
+                <mesh name="Object_38045" geometry={nodes.Object_38045?.geometry} material={materials.robo_arm} position={[-0.006, -0.021, 0.05]} />
+                <mesh name="Object_38046" geometry={nodes.Object_38046?.geometry} material={materials.robo_arm} position={[-0.019, -0.028, 0.05]} />
+                <mesh name="Object_38047" geometry={nodes.Object_38047?.geometry} material={materials.robo_arm} position={[-0.006, -0.023, 0.05]} />
+                <mesh name="Object_38048" geometry={nodes.Object_38048?.geometry} material={materials.robo_arm} position={[-0.006, -0.024, 0.05]} />
+                <mesh name="Object_38049" geometry={nodes.Object_38049?.geometry} material={materials.robo_arm} position={[-0.015, -0.03, 0.05]} />
+                <mesh name="Object_38050" geometry={nodes.Object_38050?.geometry} material={materials.robo_arm} position={[-0.007, -0.026, 0.05]} />
+                <mesh name="Object_38051" geometry={nodes.Object_38051?.geometry} material={materials.robo_arm} position={[-0.012, -0.03, 0.05]} />
+                <mesh name="Object_38052" geometry={nodes.Object_38052?.geometry} material={materials.robo_arm} position={[-0.008, -0.027, 0.05]} />
+                <mesh name="Object_38053" geometry={nodes.Object_38053?.geometry} material={materials.robo_arm} position={[-0.009, -0.029, 0.05]} />
+                <mesh name="Object_38054" geometry={nodes.Object_38054?.geometry} material={materials.robo_arm} position={[-0.029, 0, 0.001]} />
+                <mesh name="Object_38055" geometry={nodes.Object_38055?.geometry} material={materials.robo_arm} />
+                <mesh name="Object_38056" geometry={nodes.Object_38056?.geometry} material={materials.robo_arm} position={[-0.014, 0, 0.059]} />
+                <mesh name="Object_38057" geometry={nodes.Object_38057?.geometry} material={materials.robo_arm} position={[-0.029, 0, 0.051]} />
+                <mesh name="Object_38058" geometry={nodes.Object_38058?.geometry} material={materials.robo_arm} position={[-0.021, -0.028, 0.054]} />
+                <mesh name="Object_38059" geometry={nodes.Object_38059?.geometry} material={materials.robo_arm} position={[-0.023, -0.026, 0.054]} />
+                <mesh name="Object_38060" geometry={nodes.Object_38060?.geometry} material={materials.robo_arm} position={[-0.023, -0.025, 0.054]} />
+                <mesh name="Object_38061" geometry={nodes.Object_38061?.geometry} material={materials.robo_arm} position={[-0.007, -0.016, 0.054]} />
+                <mesh name="Object_38062" geometry={nodes.Object_38062?.geometry} material={materials.robo_arm} position={[-0.008, -0.015, 0.054]} />
+                <mesh name="Object_38063" geometry={nodes.Object_38063?.geometry} material={materials.robo_arm} position={[-0.01, -0.014, 0.054]} />
+                <mesh name="Object_38064" geometry={nodes.Object_38064?.geometry} material={materials.robo_arm} position={[-0.012, -0.013, 0.054]} />
+                <mesh name="Object_38065" geometry={nodes.Object_38065?.geometry} material={materials.robo_arm} position={[-0.02, -0.015, 0.054]} />
+                <mesh name="Object_38066" geometry={nodes.Object_38066?.geometry} material={materials.robo_arm} position={[-0.021, -0.016, 0.054]} />
+                <mesh name="Object_38067" geometry={nodes.Object_38067?.geometry} material={materials.robo_arm} position={[-0.023, -0.017, 0.054]} />
+                <mesh name="Object_38068" geometry={nodes.Object_38068?.geometry} material={materials.robo_arm} position={[-0.013, -0.013, 0.056]} />
+                <mesh name="Object_38069" geometry={nodes.Object_38069?.geometry} material={materials.robo_arm} position={[-0.006, -0.017, 0.054]} />
+                <mesh name="Object_38070" geometry={nodes.Object_38070?.geometry} material={materials.robo_arm} position={[-0.015, -0.031, 0.054]} />
+                <mesh name="Object_38071" geometry={nodes.Object_38071?.geometry} material={materials.robo_arm} position={[-0.017, -0.031, 0.054]} />
+                <mesh name="Object_38072" geometry={nodes.Object_38072?.geometry} material={materials.robo_arm} position={[-0.019, -0.03, 0.054]} />
+                <mesh name="Object_38073" geometry={nodes.Object_38073?.geometry} material={materials.robo_arm} position={[-0.02, -0.029, 0.054]} />
+                <mesh name="Object_38074" geometry={nodes.Object_38074?.geometry} material={materials.robo_arm} position={[-0.019, -0.014, 0.054]} />
+                <mesh name="Object_38075" geometry={nodes.Object_38075?.geometry} material={materials.robo_arm} position={[-0.023, -0.019, 0.054]} />
+                <mesh name="Object_38076" geometry={nodes.Object_38076?.geometry} material={materials.robo_arm} position={[-0.024, -0.023, 0.054]} />
+                <mesh name="Object_38077" geometry={nodes.Object_38077?.geometry} material={materials.robo_arm} position={[-0.015, -0.013, 0.054]} />
+                <mesh name="Object_38078" geometry={nodes.Object_38078?.geometry} material={materials.robo_arm} position={[-0.017, -0.013, 0.054]} />
+                <mesh name="Object_38079" geometry={nodes.Object_38079?.geometry} material={materials.robo_arm} position={[-0.014, -0.013, 0.056]} />
+                <mesh name="Object_38080" geometry={nodes.Object_38080?.geometry} material={materials.robo_arm} position={[-0.005, -0.019, 0.054]} />
+                <mesh name="Object_38081" geometry={nodes.Object_38081?.geometry} material={materials.robo_arm} position={[-0.005, -0.021, 0.054]} />
+                <mesh name="Object_38082" geometry={nodes.Object_38082?.geometry} material={materials.robo_arm} position={[-0.024, -0.021, 0.054]} />
+                <mesh name="Object_38083" geometry={nodes.Object_38083?.geometry} material={materials.robo_arm} position={[-0.013, -0.031, 0.054]} />
+                <mesh name="Object_38084" geometry={nodes.Object_38084?.geometry} material={materials.robo_arm} position={[-0.013, -0.013, 0.053]} />
+                <mesh name="Object_38085" geometry={nodes.Object_38085?.geometry} material={materials.robo_arm} position={[-0.006, -0.026, 0.054]} />
+                <mesh name="Object_38086" geometry={nodes.Object_38086?.geometry} material={materials.robo_arm} position={[-0.007, -0.028, 0.054]} />
+                <mesh name="Object_38087" geometry={nodes.Object_38087?.geometry} material={materials.robo_arm} position={[-0.01, -0.03, 0.056]} />
+                <mesh name="Object_38088" geometry={nodes.Object_38088?.geometry} material={materials.robo_arm} position={[-0.012, -0.031, 0.054]} />
+                <mesh name="Object_38089" geometry={nodes.Object_38089?.geometry} material={materials.robo_arm} position={[-0.005, -0.023, 0.054]} />
+                <mesh name="Object_38090" geometry={nodes.Object_38090?.geometry} material={materials.robo_arm} position={[-0.005, -0.025, 0.054]} />
+                <mesh name="Object_38091" geometry={nodes.Object_38091?.geometry} material={materials.robo_arm} position={[-0.008, -0.029, 0.054]} />
+                <mesh name="Object_38092" geometry={nodes.Object_38092?.geometry} material={materials.robo_arm} position={[-0.009, -0.03, 0.056]} />
+                <mesh name="Object_38093" geometry={nodes.Object_38093?.geometry} material={materials.robo_arm} position={[-0.01, -0.03, 0.053]} />
+                <mesh name="Object_38094" geometry={nodes.Object_38094?.geometry} material={materials.robo_arm} position={[-0.013, -0.009, 0.054]} />
+                <mesh name="Object_38095" geometry={nodes.Object_38095?.geometry} material={materials.robo_arm} position={[-0.015, -0.009, 0.054]} />
+                <mesh name="Object_38096" geometry={nodes.Object_38096?.geometry} material={materials.robo_arm} position={[-0.017, -0.008, 0.054]} />
+                <mesh name="Object_38097" geometry={nodes.Object_38097?.geometry} material={materials.robo_arm} position={[-0.005, -0.002, 0.054]} />
+                <mesh name="Object_38098" geometry={nodes.Object_38098?.geometry} material={materials.robo_arm} position={[-0.006, -0.004, 0.054]} />
+                <mesh name="Object_38099" geometry={nodes.Object_38099?.geometry} material={materials.robo_arm} position={[-0.023, 0.003, 0.054]} />
+                <mesh name="Object_38100" geometry={nodes.Object_38100?.geometry} material={materials.robo_arm} position={[-0.023, 0.001, 0.054]} />
+                <mesh name="Object_38101" geometry={nodes.Object_38101?.geometry} material={materials.robo_arm} position={[-0.009, 0.008, 0.056]} />
+                <mesh name="Object_38102" geometry={nodes.Object_38102?.geometry} material={materials.robo_arm} position={[-0.01, 0.009, 0.054]} />
+                <mesh name="Object_38103" geometry={nodes.Object_38103?.geometry} material={materials.robo_arm} position={[-0.022, 0.005, 0.054]} />
+                <mesh name="Object_38104" geometry={nodes.Object_38104?.geometry} material={materials.robo_arm} position={[-0.008, 0.008, 0.053]} />
+                <mesh name="Object_38105" geometry={nodes.Object_38105?.geometry} material={materials.robo_arm} position={[-0.008, 0.007, 0.056]} />
+                <mesh name="Object_38106" geometry={nodes.Object_38106?.geometry} material={materials.robo_arm} position={[-0.007, 0.006, 0.054]} />
+                <mesh name="Object_38107" geometry={nodes.Object_38107?.geometry} material={materials.robo_arm} position={[-0.023, -0.002, 0.054]} />
+                <mesh name="Object_38108" geometry={nodes.Object_38108?.geometry} material={materials.robo_arm} position={[-0.023, 0, 0.054]} />
+                <mesh name="Object_38109" geometry={nodes.Object_38109?.geometry} material={materials.robo_arm} position={[-0.021, 0.006, 0.054]} />
+                <mesh name="Object_38110" geometry={nodes.Object_38110?.geometry} material={materials.robo_arm} position={[-0.005, 0.003, 0.054]} />
+                <mesh name="Object_38111" geometry={nodes.Object_38111?.geometry} material={materials.robo_arm} position={[-0.006, 0.005, 0.054]} />
+                <mesh name="Object_38112" geometry={nodes.Object_38112?.geometry} material={materials.robo_arm} position={[-0.017, 0.009, 0.054]} />
+                <mesh name="Object_38113" geometry={nodes.Object_38113?.geometry} material={materials.robo_arm} position={[-0.018, 0.009, 0.054]} />
+                <mesh name="Object_38114" geometry={nodes.Object_38114?.geometry} material={materials.robo_arm} position={[-0.02, 0.008, 0.054]} />
+                <mesh name="Object_38115" geometry={nodes.Object_38115?.geometry} material={materials.robo_arm} position={[-0.005, 0.001, 0.054]} />
+                <mesh name="Object_38116" geometry={nodes.Object_38116?.geometry} material={materials.robo_arm} position={[-0.01, -0.008, 0.054]} />
+                <mesh name="Object_38117" geometry={nodes.Object_38117?.geometry} material={materials.robo_arm} position={[-0.011, -0.008, 0.056]} />
+                <mesh name="Object_38118" geometry={nodes.Object_38118?.geometry} material={materials.robo_arm} position={[-0.005, 0, 0.054]} />
+                <mesh name="Object_38119" geometry={nodes.Object_38119?.geometry} material={materials.robo_arm} position={[-0.018, -0.008, 0.054]} />
+                <mesh name="Object_38120" geometry={nodes.Object_38120?.geometry} material={materials.robo_arm} position={[-0.02, -0.007, 0.054]} />
+                <mesh name="Object_38121" geometry={nodes.Object_38121?.geometry} material={materials.robo_arm} position={[-0.011, 0.009, 0.054]} />
+                <mesh name="Object_38122" geometry={nodes.Object_38122?.geometry} material={materials.robo_arm} position={[-0.012, -0.009, 0.056]} />
+                <mesh name="Object_38123" geometry={nodes.Object_38123?.geometry} material={materials.robo_arm} position={[-0.013, 0.01, 0.054]} />
+                <mesh name="Object_38124" geometry={nodes.Object_38124?.geometry} material={materials.robo_arm} position={[-0.022, -0.004, 0.054]} />
+                <mesh name="Object_38125" geometry={nodes.Object_38125?.geometry} material={materials.robo_arm} position={[-0.012, -0.009, 0.053]} />
+                <mesh name="Object_38126" geometry={nodes.Object_38126?.geometry} material={materials.robo_arm} position={[-0.008, -0.007, 0.054]} />
+                <mesh name="Object_38127" geometry={nodes.Object_38127?.geometry} material={materials.robo_arm} position={[-0.021, -0.005, 0.054]} />
+                <mesh name="Object_38128" geometry={nodes.Object_38128?.geometry} material={materials.robo_arm} position={[-0.007, -0.005, 0.054]} />
+                <mesh name="Object_38129" geometry={nodes.Object_38129?.geometry} material={materials.robo_arm} position={[-0.015, 0.01, 0.054]} />
+                <mesh name="Object_38130" geometry={nodes.Object_38130?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.053]} />
+                <mesh name="Object_38131" geometry={nodes.Object_38131?.geometry} material={materials.robo_arm} position={[-0.014, 0, 0]} />
+              </group>
+              <group ref={setRef("roboarm019_low_18")} name="roboarm019_low_18" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_40" geometry={nodes.Object_40?.geometry} material={materials.robo_arm} position={[-0.132, 0, 0.056]} />
+                <mesh name="Object_40001" geometry={nodes.Object_40001?.geometry} material={materials.robo_arm} position={[-0.132, 0, -0.034]} />
+              </group>
+              <group ref={setRef("roboarm020_low_19")} name="roboarm020_low_19" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_42" geometry={nodes.Object_42?.geometry} material={materials.robo_arm} position={[-0.071, 0.002, 0.011]} />
+                <mesh name="Object_42001" geometry={nodes.Object_42001?.geometry} material={materials.robo_arm} position={[-0.048, 0.002, 0.011]} />
+                <mesh name="Object_42002" geometry={nodes.Object_42002?.geometry} material={materials.robo_arm} position={[-0.059, 0.002, 0.011]} />
+              </group>
+              <group ref={setRef("roboarm021_low_20")} name="roboarm021_low_20" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_44" geometry={nodes.Object_44?.geometry} material={materials.robo_arm} position={[-0.123, 0.012, -0.012]} />
+                <mesh name="Object_44001" geometry={nodes.Object_44001?.geometry} material={materials.robo_arm} position={[-0.123, -0.012, 0.035]} />
+                <mesh name="Object_44002" geometry={nodes.Object_44002?.geometry} material={materials.robo_arm} position={[-0.123, 0, 0.011]} />
+                <mesh name="Object_44003" geometry={nodes.Object_44003?.geometry} material={materials.robo_arm} position={[-0.121, 0, 0.011]} />
+              </group>
+              <group ref={setRef("roboarm022_low_21")} name="roboarm022_low_21" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_46" geometry={nodes.Object_46?.geometry} material={materials.robo_arm} position={[-0.091, 0, 0.011]} />
+                <mesh name="Object_46001" geometry={nodes.Object_46001?.geometry} material={materials.robo_arm} position={[-0.075, 0.001, 0.011]} />
+                <mesh name="Object_46002" geometry={nodes.Object_46002?.geometry} material={materials.robo_arm} position={[-0.083, 0.002, 0.011]} />
+              </group>
+              <group ref={setRef("roboarm023_low_22")} name="roboarm023_low_22" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_48" geometry={nodes.Object_48?.geometry} material={materials.robo_arm} position={[-0.055, 0.028, 0.143]} />
+                <mesh name="Object_48001" geometry={nodes.Object_48001?.geometry} material={materials.robo_arm} position={[-0.187, 0.084, 0.091]} />
+                <mesh name="Object_48002" geometry={nodes.Object_48002?.geometry} material={materials.robo_arm} position={[-0.163, 0.043, 0.002]} />
+              </group>
+              <group ref={setRef("roboarm024_low_23")} name="roboarm024_low_23" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_50" geometry={nodes.Object_50?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.059]} />
+                <mesh name="Object_50001" geometry={nodes.Object_50001?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.096]} />
+                <mesh name="Object_50002" geometry={nodes.Object_50002?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.077]} />
+                <mesh name="Object_50003" geometry={nodes.Object_50003?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.098]} />
+                <mesh name="Object_50004" geometry={nodes.Object_50004?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.098]} />
+                <mesh name="Object_50005" geometry={nodes.Object_50005?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.099]} />
+                <mesh name="Object_50006" geometry={nodes.Object_50006?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.1]} />
+                <mesh name="Object_50007" geometry={nodes.Object_50007?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.1]} />
+                <mesh name="Object_50008" geometry={nodes.Object_50008?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.101]} />
+                <mesh name="Object_50009" geometry={nodes.Object_50009?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.101]} />
+                <mesh name="Object_50010" geometry={nodes.Object_50010?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.102]} />
+                <mesh name="Object_50011" geometry={nodes.Object_50011?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.103]} />
+                <mesh name="Object_50012" geometry={nodes.Object_50012?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.103]} />
+                <mesh name="Object_50013" geometry={nodes.Object_50013?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.104]} />
+                <mesh name="Object_50014" geometry={nodes.Object_50014?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.104]} />
+                <mesh name="Object_50015" geometry={nodes.Object_50015?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.105]} />
+                <mesh name="Object_50016" geometry={nodes.Object_50016?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.106]} />
+                <mesh name="Object_50017" geometry={nodes.Object_50017?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.106]} />
+                <mesh name="Object_50018" geometry={nodes.Object_50018?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.107]} />
+                <mesh name="Object_50019" geometry={nodes.Object_50019?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.107]} />
+                <mesh name="Object_50020" geometry={nodes.Object_50020?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.108]} />
+                <mesh name="Object_50021" geometry={nodes.Object_50021?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.109]} />
+                <mesh name="Object_50022" geometry={nodes.Object_50022?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.109]} />
+                <mesh name="Object_50023" geometry={nodes.Object_50023?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.11]} />
+                <mesh name="Object_50024" geometry={nodes.Object_50024?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.11]} />
+                <mesh name="Object_50025" geometry={nodes.Object_50025?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.111]} />
+                <mesh name="Object_50026" geometry={nodes.Object_50026?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.112]} />
+                <mesh name="Object_50027" geometry={nodes.Object_50027?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.112]} />
+                <mesh name="Object_50028" geometry={nodes.Object_50028?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.113]} />
+                <mesh name="Object_50029" geometry={nodes.Object_50029?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.113]} />
+                <mesh name="Object_50030" geometry={nodes.Object_50030?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.114]} />
+                <mesh name="Object_50031" geometry={nodes.Object_50031?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.115]} />
+                <mesh name="Object_50032" geometry={nodes.Object_50032?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.115]} />
+                <mesh name="Object_50033" geometry={nodes.Object_50033?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.116]} />
+                <mesh name="Object_50034" geometry={nodes.Object_50034?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.116]} />
+                <mesh name="Object_50035" geometry={nodes.Object_50035?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.117]} />
+                <mesh name="Object_50036" geometry={nodes.Object_50036?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.118]} />
+                <mesh name="Object_50037" geometry={nodes.Object_50037?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.118]} />
+                <mesh name="Object_50038" geometry={nodes.Object_50038?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.119]} />
+                <mesh name="Object_50039" geometry={nodes.Object_50039?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.119]} />
+                <mesh name="Object_50040" geometry={nodes.Object_50040?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.12]} />
+                <mesh name="Object_50041" geometry={nodes.Object_50041?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.121]} />
+                <mesh name="Object_50042" geometry={nodes.Object_50042?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.122]} />
+                <mesh name="Object_50043" geometry={nodes.Object_50043?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.126]} />
+                <mesh name="Object_50044" geometry={nodes.Object_50044?.geometry} material={materials.robo_arm} position={[-0.014, 0.001, 0.125]} />
+              </group>
+              <group ref={setRef("roboarm025_low_24")} name="roboarm025_low_24" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_52" geometry={nodes.Object_52?.geometry} material={materials.robo_arm} position={[-0.017, -0.019, 0.063]} />
+                <mesh name="Object_52001" geometry={nodes.Object_52001?.geometry} material={materials.robo_arm} position={[-0.014, -0.022, 0.063]} />
+                <mesh name="Object_52002" geometry={nodes.Object_52002?.geometry} material={materials.robo_arm} position={[-0.015, -0.022, 0.07]} />
+                <mesh name="Object_52003" geometry={nodes.Object_52003?.geometry} material={materials.robo_arm} position={[-0.014, -0.022, 0.056]} />
+              </group>
+              <group ref={setRef("roboarm026_low_25")} name="roboarm026_low_25" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_54" geometry={nodes.Object_54?.geometry} material={materials.robo_arm} position={[-0.015, -0.022, 0.071]} />
+                <mesh name="Object_54001" geometry={nodes.Object_54001?.geometry} material={materials.robo_arm} position={[-0.015, -0.022, 0.071]} />
+                <mesh name="Object_54002" geometry={nodes.Object_54002?.geometry} material={materials.robo_arm} position={[-0.015, -0.022, 0.06]} />
+              </group>
+              <group ref={setRef("roboarm027_low_26")} name="roboarm027_low_26" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_56" geometry={nodes.Object_56?.geometry} material={materials.robo_arm} position={[-0.139, 0.013, 0.073]} />
+                <mesh name="Object_56001" geometry={nodes.Object_56001?.geometry} material={materials.robo_arm} position={[-0.139, 0.013, -0.051]} />
+                <mesh name="Object_56002" geometry={nodes.Object_56002?.geometry} material={materials.robo_arm} position={[-0.139, -0.013, 0.073]} />
+                <mesh name="Object_56003" geometry={nodes.Object_56003?.geometry} material={materials.robo_arm} position={[-0.139, -0.013, -0.051]} />
+                <mesh name="Object_56004" geometry={nodes.Object_56004?.geometry} material={materials.robo_arm} position={[-0.139, 0.013, 0.073]} />
+                <mesh name="Object_56005" geometry={nodes.Object_56005?.geometry} material={materials.robo_arm} position={[-0.139, 0.012, -0.05]} />
+                <mesh name="Object_56006" geometry={nodes.Object_56006?.geometry} material={materials.robo_arm} position={[-0.139, -0.012, 0.073]} />
+                <mesh name="Object_56007" geometry={nodes.Object_56007?.geometry} material={materials.robo_arm} position={[-0.139, -0.013, -0.05]} />
+                <mesh name="Object_56008" geometry={nodes.Object_56008?.geometry} material={materials.robo_arm} position={[-0.139, 0.013, -0.052]} />
+                <mesh name="Object_56009" geometry={nodes.Object_56009?.geometry} material={materials.robo_arm} position={[-0.139, -0.013, -0.052]} />
+                <mesh name="Object_56010" geometry={nodes.Object_56010?.geometry} material={materials.robo_arm} position={[-0.139, -0.013, 0.074]} />
+                <mesh name="Object_56011" geometry={nodes.Object_56011?.geometry} material={materials.robo_arm} position={[-0.139, 0.013, 0.074]} />
+                <mesh name="Object_56012" geometry={nodes.Object_56012?.geometry} material={materials.robo_arm} position={[-0.139, 0.013, -0.051]} />
+                <mesh name="Object_56013" geometry={nodes.Object_56013?.geometry} material={materials.robo_arm} position={[-0.139, -0.013, -0.051]} />
+                <mesh name="Object_56014" geometry={nodes.Object_56014?.geometry} material={materials.robo_arm} position={[-0.139, -0.013, 0.073]} />
+                <mesh name="Object_56015" geometry={nodes.Object_56015?.geometry} material={materials.robo_arm} position={[-0.139, 0.013, 0.073]} />
+              </group>
+              <group ref={setRef("roboarm028_low_27")} name="roboarm028_low_27" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_58" geometry={nodes.Object_58?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.056]} />
+                <mesh name="Object_58001" geometry={nodes.Object_58001?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.056]} />
+                <mesh name="Object_58002" geometry={nodes.Object_58002?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.052]} />
+                <mesh name="Object_58003" geometry={nodes.Object_58003?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.054]} />
+                <mesh name="Object_58004" geometry={nodes.Object_58004?.geometry} material={materials.robo_arm} position={[-0.014, 0.024, 0.058]} />
+              </group>
+              <group ref={setRef("roboarm_low_28")} name="roboarm_low_28" position={[0.217, 0.553, 0.307]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_60" geometry={nodes.Object_60?.geometry} material={materials.robo_arm} position={[-0.014, 0.027, 0.054]} />
+                <mesh name="Object_60001" geometry={nodes.Object_60001?.geometry} material={materials.robo_arm} position={[-0.014, 0.026, 0.054]} />
+                <mesh name="Object_60002" geometry={nodes.Object_60002?.geometry} material={materials.robo_arm} position={[-0.013, 0.026, 0.054]} />
+                <mesh name="Object_60003" geometry={nodes.Object_60003?.geometry} material={materials.robo_arm} position={[-0.013, 0.027, 0.054]} />
+                <mesh name="Object_60004" geometry={nodes.Object_60004?.geometry} material={materials.robo_arm} position={[-0.013, 0.021, 0.054]} />
+                <mesh name="Object_60005" geometry={nodes.Object_60005?.geometry} material={materials.robo_arm} position={[-0.014, 0.021, 0.054]} />
+                <mesh name="Object_60006" geometry={nodes.Object_60006?.geometry} material={materials.robo_arm} position={[-0.013, 0.022, 0.054]} />
+                <mesh name="Object_60007" geometry={nodes.Object_60007?.geometry} material={materials.robo_arm} position={[-0.014, 0.022, 0.054]} />
+                <mesh name="Object_60008" geometry={nodes.Object_60008?.geometry} material={materials.robo_arm} position={[-0.013, 0.022, 0.054]} />
+                <mesh name="Object_60009" geometry={nodes.Object_60009?.geometry} material={materials.robo_arm} position={[-0.012, 0.024, 0.054]} />
+                <mesh name="Object_60010" geometry={nodes.Object_60010?.geometry} material={materials.robo_arm} position={[-0.011, 0.023, 0.054]} />
+                <mesh name="Object_60011" geometry={nodes.Object_60011?.geometry} material={materials.robo_arm} position={[-0.012, 0.024, 0.054]} />
+                <mesh name="Object_60012" geometry={nodes.Object_60012?.geometry} material={materials.robo_arm} position={[-0.011, 0.025, 0.054]} />
+                <mesh name="Object_60013" geometry={nodes.Object_60013?.geometry} material={materials.robo_arm} position={[-0.011, 0.025, 0.054]} />
+                <mesh name="Object_60014" geometry={nodes.Object_60014?.geometry} material={materials.robo_arm} position={[-0.011, 0.024, 0.054]} />
+                <mesh name="Object_60015" geometry={nodes.Object_60015?.geometry} material={materials.robo_arm} position={[-0.013, 0.026, 0.054]} />
+                <mesh name="Object_60016" geometry={nodes.Object_60016?.geometry} material={materials.robo_arm} position={[-0.013, 0.027, 0.054]} />
+                <mesh name="Object_60017" geometry={nodes.Object_60017?.geometry} material={materials.robo_arm} position={[-0.014, 0.026, 0.054]} />
+                <mesh name="Object_60018" geometry={nodes.Object_60018?.geometry} material={materials.robo_arm} position={[-0.014, 0.027, 0.054]} />
+                <mesh name="Object_60019" geometry={nodes.Object_60019?.geometry} material={materials.robo_arm} position={[-0.011, 0.024, 0.054]} />
+                <mesh name="Object_60020" geometry={nodes.Object_60020?.geometry} material={materials.robo_arm} position={[-0.011, 0.023, 0.054]} />
+                <mesh name="Object_60021" geometry={nodes.Object_60021?.geometry} material={materials.robo_arm} position={[-0.014, 0.022, 0.054]} />
+                <mesh name="Object_60022" geometry={nodes.Object_60022?.geometry} material={materials.robo_arm} position={[-0.013, 0.021, 0.054]} />
+                <mesh name="Object_60023" geometry={nodes.Object_60023?.geometry} material={materials.robo_arm} position={[-0.014, 0.021, 0.054]} />
+                <mesh name="Object_60024" geometry={nodes.Object_60024?.geometry} material={materials.robo_arm} position={[-0.014, 0.026, 0.056]} />
+                <mesh name="Object_60025" geometry={nodes.Object_60025?.geometry} material={materials.robo_arm} position={[-0.011, 0.024, 0.056]} />
+                <mesh name="Object_60026" geometry={nodes.Object_60026?.geometry} material={materials.robo_arm} position={[-0.014, 0.021, 0.056]} />
+              </group>
+              <group ref={setRef("robot_base002_low_31")} name="robot_base002_low_31" position={[0.092, 0.778, 0.038]} rotation={[-0.646, -0.553, 2.764]}>
+                <mesh name="Object_66" geometry={nodes.Object_66?.geometry} material={materials.robot_base} position={[-0.054, 0.035, 0]} />
+                <mesh name="Object_66001" geometry={nodes.Object_66001?.geometry} material={materials.robot_base} position={[-0.093, 0.13, 0]} />
+                <mesh name="Object_66002" geometry={nodes.Object_66002?.geometry} material={materials.robot_base} position={[-0.093, 0.127, 0]} />
+                <mesh name="Object_66003" geometry={nodes.Object_66003?.geometry} material={materials.robot_base} position={[-0.073, -0.017, 0]} />
+                <mesh name="Object_66004" geometry={nodes.Object_66004?.geometry} material={materials.robot_base} position={[0, 0, 0.032]} />
+                <mesh name="Object_66005" geometry={nodes.Object_66005?.geometry} material={materials.robot_base} position={[0, 0, -0.032]} />
+                <mesh name="Object_66006" geometry={nodes.Object_66006?.geometry} material={materials.robot_base} position={[-0.002, 0, 0.037]} />
+                <mesh name="Object_66007" geometry={nodes.Object_66007?.geometry} material={materials.robot_base} position={[-0.002, 0, -0.037]} />
+              </group>
+              <group ref={setRef("robot_base003_low_32")} name="robot_base003_low_32" position={[0.121, 0.655, 0.154]} rotation={[-0.646, -0.553, 2.764]}>
+                <mesh name="Object_68" geometry={nodes.Object_68?.geometry} material={materials.robot_base} position={[-0.034, 0.086, 0]} />
+                <mesh name="Object_68001" geometry={nodes.Object_68001?.geometry} material={materials.robot_base} position={[-0.086, 0.115, 0.035]} />
+                <mesh name="Object_68002" geometry={nodes.Object_68002?.geometry} material={materials.robot_base} position={[-0.086, 0.115, -0.035]} />
+                <mesh name="Object_68003" geometry={nodes.Object_68003?.geometry} material={materials.robot_base} position={[-0.002, 0, 0]} />
+                <mesh name="Object_68004" geometry={nodes.Object_68004?.geometry} material={materials.robot_base} position={[-0.002, 0.002, 0]} />
+                <mesh name="Object_68005" geometry={nodes.Object_68005?.geometry} material={materials.robot_base} position={[-0.011, 0.144, 0]} />
+                <mesh name="Object_68006" geometry={nodes.Object_68006?.geometry} material={materials.robot_base} position={[-0.084, 0.115, 0.037]} />
+                <mesh name="Object_68007" geometry={nodes.Object_68007?.geometry} material={materials.robot_base} position={[-0.084, 0.115, -0.037]} />
+              </group>
+              <group ref={setRef("robot_base004_low_33")} name="robot_base004_low_33" position={[0.079, 0.778, 0.028]} rotation={[-1.713, 0.109, 2.491]}>
+                <mesh name="Object_70" geometry={nodes.Object_70?.geometry} material={materials.robot_base} position={[-0.008, -0.002, 0]} />
+              </group>
+              <group ref={setRef("robot_base005_low_34")} name="robot_base005_low_34" position={[0.126, 0.667, 0.148]} rotation={[-0.646, -0.553, 2.764]}>
+                <mesh name="Object_72" geometry={nodes.Object_72?.geometry} material={materials.robot_base} position={[0.002, 0.006, 0]} />
+              </group>
+              <group ref={setRef("robot_base006_low_35")} name="robot_base006_low_35" position={[0.146, 0.556, 0.248]} rotation={[-0.646, -0.553, 2.764]}>
+                <mesh name="Object_74" geometry={nodes.Object_74?.geometry} material={materials.robot_base} position={[-0.009, -0.002, 0]} />
+              </group>
+              <group ref={setRef("robot_base007_low_61")} name="robot_base007_low_61" position={[0.146, 0.556, 0.248]} rotation={[-2.426, 0.528, 2.729]}>
+                <mesh name="Object_126" geometry={nodes.Object_126?.geometry} material={materials.robot_base} position={[-0.018, -0.002, 0]} />
+                <mesh name="Object_126001" geometry={nodes.Object_126001?.geometry} material={materials.robot_base} position={[-0.021, -0.002, 0]} />
+                <mesh name="Object_126002" geometry={nodes.Object_126002?.geometry} material={materials.robot_base} position={[-0.028, -0.002, 0]} />
+                <mesh name="Object_126003" geometry={nodes.Object_126003?.geometry} material={materials.robot_base} position={[-0.027, -0.002, 0]} />
+                <mesh name="Object_126004" geometry={nodes.Object_126004?.geometry} material={materials.robot_base} position={[-0.03, -0.002, 0]} />
+                <mesh name="Object_126005" geometry={nodes.Object_126005?.geometry} material={materials.robot_base} position={[-0.024, -0.002, 0]} />
+                <mesh name="Object_126006" geometry={nodes.Object_126006?.geometry} material={materials.robot_base} position={[-0.053, -0.002, 0]} />
+                <mesh name="Object_126007" geometry={nodes.Object_126007?.geometry} material={materials.robot_base} position={[-0.092, -0.002, 0]} />
+              </group>
+              <group ref={setRef("robot_base008_low_36")} name="robot_base008_low_36" position={[0.436, 0.685, -0.343]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_76" geometry={nodes.Object_76?.geometry} material={materials.robot_base} position={[0.014, -0.003, 0]} />
+              </group>
+              <group ref={setRef("robot_base009_low_37")} name="robot_base009_low_37" position={[0.092, 0.258, 0.071]} rotation={[-Math.PI, 0.658, -Math.PI]}>
+                <mesh name="Object_78" geometry={nodes.Object_78?.geometry} material={materials.robot_base} position={[-0.015, -0.003, 0.001]} />
+              </group>
+              <group ref={setRef("robot_base011_low_39")} name="robot_base011_low_39" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_82" geometry={nodes.Object_82?.geometry} material={materials.robot_base} position={[-0.29, 0.414, -0.001]} />
+                <mesh name="Object_82001" geometry={nodes.Object_82001?.geometry} material={materials.robot_base} position={[-0.29, 0.603, -0.001]} />
+                <mesh name="Object_82002" geometry={nodes.Object_82002?.geometry} material={materials.robot_base} position={[-0.29, 0.792, -0.001]} />
+                <mesh name="Object_82003" geometry={nodes.Object_82003?.geometry} material={materials.robot_base} position={[-0.29, 0.416, -0.001]} />
+                <mesh name="Object_82004" geometry={nodes.Object_82004?.geometry} material={materials.robot_base} position={[-0.29, 0.789, -0.001]} />
+              </group>
+              <group ref={setRef("robot_base012_low_40")} name="robot_base012_low_40" position={[0.475, 2.037, -0.615]} rotation={[-0.646, -0.553, 2.764]}>
+                <mesh name="Object_84" geometry={nodes.Object_84?.geometry} material={materials.robot_base} position={[-0.184, 1.421, 0]} />
+                <mesh name="Object_84001" geometry={nodes.Object_84001?.geometry} material={materials.robot_base} position={[-0.168, 1.449, 0]} />
+                <mesh name="Object_84002" geometry={nodes.Object_84002?.geometry} material={materials.robot_base} position={[-0.139, 1.44, 0.035]} />
+                <mesh name="Object_84003" geometry={nodes.Object_84003?.geometry} material={materials.robot_base} position={[-0.208, 1.44, 0.035]} />
+                <mesh name="Object_84004" geometry={nodes.Object_84004?.geometry} material={materials.robot_base} position={[-0.139, 1.44, -0.035]} />
+                <mesh name="Object_84005" geometry={nodes.Object_84005?.geometry} material={materials.robot_base} position={[-0.208, 1.44, -0.035]} />
+                <mesh name="Object_84006" geometry={nodes.Object_84006?.geometry} material={materials.robot_base} position={[-0.208, 1.426, -0.035]} />
+                <mesh name="Object_84007" geometry={nodes.Object_84007?.geometry} material={materials.robot_base} position={[-0.139, 1.427, -0.035]} />
+                <mesh name="Object_84008" geometry={nodes.Object_84008?.geometry} material={materials.robot_base} position={[-0.139, 1.426, 0.035]} />
+                <mesh name="Object_84009" geometry={nodes.Object_84009?.geometry} material={materials.robot_base} position={[-0.208, 1.426, 0.035]} />
+              </group>
+              <group ref={setRef("robot_base013_low_41")} name="robot_base013_low_41" position={[0.415, 0.685, -0.359]} rotation={[-1.713, 0.109, 2.491]}>
+                <mesh name="Object_86" geometry={nodes.Object_86?.geometry} material={materials.robot_base} position={[0.091, -0.001, 0]} />
+                <mesh name="Object_86001" geometry={nodes.Object_86001?.geometry} material={materials.robot_base} position={[0.156, 0.197, 0]} />
+                <mesh name="Object_86002" geometry={nodes.Object_86002?.geometry} material={materials.robot_base} position={[0.196, 0.009, 0]} />
+                <mesh name="Object_86003" geometry={nodes.Object_86003?.geometry} material={materials.robot_base} position={[0, 0.001, 0]} />
+                <mesh name="Object_86004" geometry={nodes.Object_86004?.geometry} material={materials.robot_base} position={[0.004, 0.002, 0]} />
+                <mesh name="Object_86005" geometry={nodes.Object_86005?.geometry} material={materials.robot_base} position={[0.157, 0.402, 0]} />
+                <mesh name="Object_86006" geometry={nodes.Object_86006?.geometry} material={materials.robot_base} position={[0.157, 0.399, 0]} />
+              </group>
+              <group ref={setRef("robot_base014_low_42")} name="robot_base014_low_42" position={[0.898, 0.517, -1.161]} rotation={[-1.713, 0.109, 2.491]}>
+                <mesh name="Object_88" geometry={nodes.Object_88?.geometry} material={materials.robot_base} position={[0.009, 1.434, 0]} />
+                <mesh name="Object_88001" geometry={nodes.Object_88001?.geometry} material={materials.robot_base} position={[-0.082, 1.464, 0]} />
+                <mesh name="Object_88002" geometry={nodes.Object_88002?.geometry} material={materials.robot_base} position={[-0.08, 1.464, 0]} />
+                <mesh name="Object_88003" geometry={nodes.Object_88003?.geometry} material={materials.robot_base} position={[0.048, 1.345, 0.019]} />
+                <mesh name="Object_88004" geometry={nodes.Object_88004?.geometry} material={materials.robot_base} position={[0.048, 1.346, 0.022]} />
+                <mesh name="Object_88005" geometry={nodes.Object_88005?.geometry} material={materials.robot_base} position={[0.048, 1.345, -0.019]} />
+                <mesh name="Object_88006" geometry={nodes.Object_88006?.geometry} material={materials.robot_base} position={[0.048, 1.346, -0.022]} />
+                <mesh name="Object_88007" geometry={nodes.Object_88007?.geometry} material={materials.robot_base} position={[0.06, 1.438, -0.002]} />
+                <mesh name="Object_88008" geometry={nodes.Object_88008?.geometry} material={materials.robot_base} position={[0.082, 1.395, 0.018]} />
+              </group>
+              <group ref={setRef("robot_base015_low_43")} name="robot_base015_low_43" position={[0.475, 2.037, -0.615]} rotation={[-0.646, -0.553, 2.764]}>
+                <mesh name="Object_90" geometry={nodes.Object_90?.geometry} material={materials.robot_base} position={[-0.163, 1.761, -0.035]} />
+                <mesh name="Object_90001" geometry={nodes.Object_90001?.geometry} material={materials.robot_base} position={[-0.232, 1.761, -0.035]} />
+                <mesh name="Object_90002" geometry={nodes.Object_90002?.geometry} material={materials.robot_base} position={[-0.19, 1.772, 0]} />
+                <mesh name="Object_90003" geometry={nodes.Object_90003?.geometry} material={materials.robot_base} position={[-0.224, 1.755, 0]} />
+                <mesh name="Object_90004" geometry={nodes.Object_90004?.geometry} material={materials.robot_base} position={[-0.147, 1.743, -0.042]} />
+                <mesh name="Object_90005" geometry={nodes.Object_90005?.geometry} material={materials.robot_base} position={[-0.167, 1.743, -0.057]} />
+                <mesh name="Object_90006" geometry={nodes.Object_90006?.geometry} material={materials.robot_base} position={[-0.163, 1.77, -0.035]} />
+                <mesh name="Object_90007" geometry={nodes.Object_90007?.geometry} material={materials.robot_base} position={[-0.232, 1.769, -0.035]} />
+                <mesh name="Object_90008" geometry={nodes.Object_90008?.geometry} material={materials.robot_base} position={[-0.163, 1.761, 0.035]} />
+                <mesh name="Object_90009" geometry={nodes.Object_90009?.geometry} material={materials.robot_base} position={[-0.232, 1.761, 0.035]} />
+                <mesh name="Object_90010" geometry={nodes.Object_90010?.geometry} material={materials.robot_base} position={[-0.167, 1.743, 0.057]} />
+                <mesh name="Object_90011" geometry={nodes.Object_90011?.geometry} material={materials.robot_base} position={[-0.147, 1.743, 0.042]} />
+                <mesh name="Object_90012" geometry={nodes.Object_90012?.geometry} material={materials.robot_base} position={[-0.232, 1.769, 0.035]} />
+                <mesh name="Object_90013" geometry={nodes.Object_90013?.geometry} material={materials.robot_base} position={[-0.126, 1.743, 0]} />
+                <mesh name="Object_90014" geometry={nodes.Object_90014?.geometry} material={materials.robot_base} position={[-0.163, 1.769, 0.035]} />
+              </group>
+              <group ref={setRef("robot_base016_low_44")} name="robot_base016_low_44" position={[0.108, 0.258, 0.084]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_92" geometry={nodes.Object_92?.geometry} material={materials.robot_base} position={[-0.105, 0.037, 0]} />
+                <mesh name="Object_92001" geometry={nodes.Object_92001?.geometry} material={materials.robot_base} position={[-0.191, 0.042, 0]} />
+                <mesh name="Object_92002" geometry={nodes.Object_92002?.geometry} material={materials.robot_base} position={[-0.157, 0.155, 0.032]} />
+                <mesh name="Object_92003" geometry={nodes.Object_92003?.geometry} material={materials.robot_base} position={[-0.157, 0.153, 0.036]} />
+                <mesh name="Object_92004" geometry={nodes.Object_92004?.geometry} material={materials.robot_base} position={[0, 0.002, 0]} />
+                <mesh name="Object_92005" geometry={nodes.Object_92005?.geometry} material={materials.robot_base} position={[-0.002, 0.002, 0]} />
+                <mesh name="Object_92006" geometry={nodes.Object_92006?.geometry} material={materials.robot_base} position={[-0.157, 0.155, -0.032]} />
+                <mesh name="Object_92007" geometry={nodes.Object_92007?.geometry} material={materials.robot_base} position={[-0.157, 0.153, -0.036]} />
+              </group>
+              <group ref={setRef("robot_base017_low_45")} name="robot_base017_low_45" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_94" geometry={nodes.Object_94?.geometry} material={materials.robot_base} position={[-0.239, 0.911, 0]} />
+                <mesh name="Object_94001" geometry={nodes.Object_94001?.geometry} material={materials.robot_base} position={[-0.327, 0.901, 0]} />
+                <mesh name="Object_94002" geometry={nodes.Object_94002?.geometry} material={materials.robot_base} position={[-0.291, 0.792, 0]} />
+                <mesh name="Object_94003" geometry={nodes.Object_94003?.geometry} material={materials.robot_base} position={[-0.292, 0.794, 0.035]} />
+                <mesh name="Object_94004" geometry={nodes.Object_94004?.geometry} material={materials.robot_base} position={[-0.132, 0.943, 0]} />
+                <mesh name="Object_94005" geometry={nodes.Object_94005?.geometry} material={materials.robot_base} position={[-0.136, 0.943, 0]} />
+                <mesh name="Object_94006" geometry={nodes.Object_94006?.geometry} material={materials.robot_base} position={[-0.292, 0.794, -0.035]} />
+              </group>
+              <group ref={setRef("robot_base018_low_38")} name="robot_base018_low_38" position={[0, -0.001, 0]} rotation={[-Math.PI, 0.658, -Math.PI]}>
+                <mesh name="Object_80" geometry={nodes.Object_80?.geometry} material={materials.robot_base} position={[-0.066, 0.318, 0.05]} />
+                <mesh name="Object_80001" geometry={nodes.Object_80001?.geometry} material={materials.robot_base} position={[0.034, 0.318, 0.05]} />
+                <mesh name="Object_80002" geometry={nodes.Object_80002?.geometry} material={materials.robot_base} position={[-0.004, 0.332, 0]} />
+                <mesh name="Object_80003" geometry={nodes.Object_80003?.geometry} material={materials.robot_base} position={[-0.028, 0.31, 0]} />
+                <mesh name="Object_80004" geometry={nodes.Object_80004?.geometry} material={materials.robot_base} position={[0.034, 0.329, 0.05]} />
+                <mesh name="Object_80005" geometry={nodes.Object_80005?.geometry} material={materials.robot_base} position={[-0.066, 0.318, -0.051]} />
+                <mesh name="Object_80006" geometry={nodes.Object_80006?.geometry} material={materials.robot_base} position={[0.034, 0.318, -0.051]} />
+                <mesh name="Object_80007" geometry={nodes.Object_80007?.geometry} material={materials.robot_base} position={[0.034, 0.329, -0.051]} />
+                <mesh name="Object_80008" geometry={nodes.Object_80008?.geometry} material={materials.robot_base} position={[-0.066, 0.329, 0.05]} />
+                <mesh name="Object_80009" geometry={nodes.Object_80009?.geometry} material={materials.robot_base} position={[-0.066, 0.329, -0.051]} />
+              </group>
+              <group ref={setRef("robot_base019_low_47")} name="robot_base019_low_47" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_98" geometry={nodes.Object_98?.geometry} material={materials.robot_base} position={[-0.353, 0.311, 0.048]} />
+                <mesh name="Object_98001" geometry={nodes.Object_98001?.geometry} material={materials.robot_base} position={[-0.353, 0.206, 0.048]} />
+                <mesh name="Object_98002" geometry={nodes.Object_98002?.geometry} material={materials.robot_base} position={[-0.352, 0.275, 0]} />
+                <mesh name="Object_98003" geometry={nodes.Object_98003?.geometry} material={materials.robot_base} position={[-0.359, 0.311, 0.048]} />
+                <mesh name="Object_98004" geometry={nodes.Object_98004?.geometry} material={materials.robot_base} position={[-0.365, 0.261, 0]} />
+                <mesh name="Object_98005" geometry={nodes.Object_98005?.geometry} material={materials.robot_base} position={[-0.328, 0.31, 0]} />
+                <mesh name="Object_98006" geometry={nodes.Object_98006?.geometry} material={materials.robot_base} position={[-0.358, 0.207, 0.048]} />
+                <mesh name="Object_98007" geometry={nodes.Object_98007?.geometry} material={materials.robot_base} position={[-0.353, 0.311, -0.048]} />
+                <mesh name="Object_98008" geometry={nodes.Object_98008?.geometry} material={materials.robot_base} position={[-0.353, 0.207, -0.048]} />
+                <mesh name="Object_98009" geometry={nodes.Object_98009?.geometry} material={materials.robot_base} position={[-0.359, 0.311, -0.048]} />
+                <mesh name="Object_98010" geometry={nodes.Object_98010?.geometry} material={materials.robot_base} position={[-0.358, 0.207, -0.048]} />
+              </group>
+              <group ref={setRef("robot_base020_low_46")} name="robot_base020_low_46" position={[0.898, 0.517, -1.161]} rotation={[-1.713, 0.109, 2.491]}>
+                <mesh name="Object_96" geometry={nodes.Object_96?.geometry} material={materials.robot_base} position={[0.078, 1.499, 0.03]} />
+                <mesh name="Object_96001" geometry={nodes.Object_96001?.geometry} material={materials.robot_base} position={[0.078, 1.499, -0.03]} />
+                <mesh name="Object_96002" geometry={nodes.Object_96002?.geometry} material={materials.robot_base} position={[0.078, 1.432, 0.03]} />
+                <mesh name="Object_96003" geometry={nodes.Object_96003?.geometry} material={materials.robot_base} position={[0.078, 1.432, -0.03]} />
+                <mesh name="Object_96004" geometry={nodes.Object_96004?.geometry} material={materials.robot_base} position={[0.088, 1.465, 0]} />
+                <mesh name="Object_96005" geometry={nodes.Object_96005?.geometry} material={materials.robot_base} position={[0.08, 1.459, 0]} />
+                <mesh name="Object_96006" geometry={nodes.Object_96006?.geometry} material={materials.robot_base} position={[0.062, 1.435, 0]} />
+                <mesh name="Object_96007" geometry={nodes.Object_96007?.geometry} material={materials.robot_base} position={[0.083, 1.499, -0.03]} />
+                <mesh name="Object_96008" geometry={nodes.Object_96008?.geometry} material={materials.robot_base} position={[0.083, 1.499, 0.03]} />
+                <mesh name="Object_96009" geometry={nodes.Object_96009?.geometry} material={materials.robot_base} position={[0.083, 1.432, -0.03]} />
+                <mesh name="Object_96010" geometry={nodes.Object_96010?.geometry} material={materials.robot_base} position={[0.083, 1.432, 0.03]} />
+              </group>
+              <group ref={setRef("robot_base021_low_48")} name="robot_base021_low_48" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_100" geometry={nodes.Object_100?.geometry} material={materials.robot_base} position={[-0.35, 1, 0.048]} />
+                <mesh name="Object_100001" geometry={nodes.Object_100001?.geometry} material={materials.robot_base} position={[-0.35, 0.896, 0.048]} />
+                <mesh name="Object_100002" geometry={nodes.Object_100002?.geometry} material={materials.robot_base} position={[-0.365, 0.947, 0]} />
+                <mesh name="Object_100003" geometry={nodes.Object_100003?.geometry} material={materials.robot_base} position={[-0.352, 0.927, 0]} />
+                <mesh name="Object_100004" geometry={nodes.Object_100004?.geometry} material={materials.robot_base} position={[-0.357, 0.896, 0.048]} />
+                <mesh name="Object_100005" geometry={nodes.Object_100005?.geometry} material={materials.robot_base} position={[-0.336, 0.834, 0]} />
+                <mesh name="Object_100006" geometry={nodes.Object_100006?.geometry} material={materials.robot_base} position={[-0.313, 0.959, 0]} />
+                <mesh name="Object_100007" geometry={nodes.Object_100007?.geometry} material={materials.robot_base} position={[-0.35, 1, -0.048]} />
+                <mesh name="Object_100008" geometry={nodes.Object_100008?.geometry} material={materials.robot_base} position={[-0.35, 0.896, -0.048]} />
+                <mesh name="Object_100009" geometry={nodes.Object_100009?.geometry} material={materials.robot_base} position={[-0.357, 0.896, -0.048]} />
+                <mesh name="Object_100010" geometry={nodes.Object_100010?.geometry} material={materials.robot_base} position={[-0.356, 1, 0.048]} />
+                <mesh name="Object_100011" geometry={nodes.Object_100011?.geometry} material={materials.robot_base} position={[-0.356, 1, -0.048]} />
+              </group>
+              <group ref={setRef("robot_base022_low_49")} name="robot_base022_low_49" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_102" geometry={nodes.Object_102?.geometry} material={materials.robot_base} position={[-0.362, 0.259, 0]} />
+              </group>
+              <group ref={setRef("robot_base023_low_50")} name="robot_base023_low_50" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_104" geometry={nodes.Object_104?.geometry} material={materials.robot_base} position={[-0.366, 0.259, 0]} />
+                <mesh name="Object_104001" geometry={nodes.Object_104001?.geometry} material={materials.robot_base} position={[-0.362, 0.259, 0]} />
+              </group>
+              <group ref={setRef("robot_base024_low_52")} name="robot_base024_low_52" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_108" geometry={nodes.Object_108?.geometry} material={materials.robot_base} position={[-0.366, 0.948, 0]} />
+                <mesh name="Object_108001" geometry={nodes.Object_108001?.geometry} material={materials.robot_base} position={[-0.363, 0.948, 0]} />
+              </group>
+              <group ref={setRef("robot_base025_low_53")} name="robot_base025_low_53" position={[0, -0.001, 0]} rotation={[-Math.PI, 0.658, -Math.PI]}>
+                <mesh name="Object_110" geometry={nodes.Object_110?.geometry} material={materials.robot_base} position={[-0.121, 0.259, -0.05]} />
+                <mesh name="Object_110001" geometry={nodes.Object_110001?.geometry} material={materials.robot_base} position={[-0.121, 0.259, 0.05]} />
+                <mesh name="Object_110002" geometry={nodes.Object_110002?.geometry} material={materials.robot_base} position={[-0.003, 0.09, 0]} />
+                <mesh name="Object_110003" geometry={nodes.Object_110003?.geometry} material={materials.robot_base} position={[-0.048, 0.218, 0]} />
+                <mesh name="Object_110004" geometry={nodes.Object_110004?.geometry} material={materials.robot_base} position={[-0.02, 0.31, 0.049]} />
+                <mesh name="Object_110005" geometry={nodes.Object_110005?.geometry} material={materials.robot_base} position={[-0.03, 0.305, -0.069]} />
+                <mesh name="Object_110006" geometry={nodes.Object_110006?.geometry} material={materials.robot_base} position={[-0.1, 0.343, -0.026]} />
+                <mesh name="Object_110007" geometry={nodes.Object_110007?.geometry} material={materials.robot_base} position={[-0.118, 0.259, -0.055]} />
+                <mesh name="Object_110008" geometry={nodes.Object_110008?.geometry} material={materials.robot_base} position={[-0.118, 0.259, 0.055]} />
+              </group>
+              <group ref={setRef("robot_base026_low_54")} name="robot_base026_low_54" position={[0.898, 0.517, -1.161]} rotation={[-1.713, 0.109, 2.491]}>
+                <mesh name="Object_112" geometry={nodes.Object_112?.geometry} material={materials.robot_base} position={[0.08, 1.499, 0.03]} />
+                <mesh name="Object_112001" geometry={nodes.Object_112001?.geometry} material={materials.robot_base} position={[0.079, 1.499, 0.03]} />
+                <mesh name="Object_112002" geometry={nodes.Object_112002?.geometry} material={materials.robot_base} position={[0.079, 1.499, 0.03]} />
+                <mesh name="Object_112003" geometry={nodes.Object_112003?.geometry} material={materials.robot_base} position={[0.078, 1.499, 0.03]} />
+                <mesh name="Object_112004" geometry={nodes.Object_112004?.geometry} material={materials.robot_base} position={[0.08, 1.499, 0.03]} />
+                <mesh name="Object_112005" geometry={nodes.Object_112005?.geometry} material={materials.robot_base} position={[0.08, 1.499, -0.03]} />
+                <mesh name="Object_112006" geometry={nodes.Object_112006?.geometry} material={materials.robot_base} position={[0.079, 1.499, -0.03]} />
+                <mesh name="Object_112007" geometry={nodes.Object_112007?.geometry} material={materials.robot_base} position={[0.079, 1.499, -0.03]} />
+                <mesh name="Object_112008" geometry={nodes.Object_112008?.geometry} material={materials.robot_base} position={[0.078, 1.499, -0.03]} />
+                <mesh name="Object_112009" geometry={nodes.Object_112009?.geometry} material={materials.robot_base} position={[0.08, 1.499, -0.03]} />
+                <mesh name="Object_112010" geometry={nodes.Object_112010?.geometry} material={materials.robot_base} position={[0.08, 1.432, 0.03]} />
+                <mesh name="Object_112011" geometry={nodes.Object_112011?.geometry} material={materials.robot_base} position={[0.079, 1.432, 0.03]} />
+                <mesh name="Object_112012" geometry={nodes.Object_112012?.geometry} material={materials.robot_base} position={[0.079, 1.432, 0.03]} />
+                <mesh name="Object_112013" geometry={nodes.Object_112013?.geometry} material={materials.robot_base} position={[0.078, 1.432, 0.03]} />
+                <mesh name="Object_112014" geometry={nodes.Object_112014?.geometry} material={materials.robot_base} position={[0.08, 1.432, 0.03]} />
+                <mesh name="Object_112015" geometry={nodes.Object_112015?.geometry} material={materials.robot_base} position={[0.079, 1.432, -0.03]} />
+                <mesh name="Object_112016" geometry={nodes.Object_112016?.geometry} material={materials.robot_base} position={[0.08, 1.432, -0.03]} />
+                <mesh name="Object_112017" geometry={nodes.Object_112017?.geometry} material={materials.robot_base} position={[0.079, 1.432, -0.03]} />
+                <mesh name="Object_112018" geometry={nodes.Object_112018?.geometry} material={materials.robot_base} position={[0.078, 1.432, -0.03]} />
+                <mesh name="Object_112019" geometry={nodes.Object_112019?.geometry} material={materials.robot_base} position={[0.08, 1.432, -0.03]} />
+              </group>
+              <group ref={setRef("robot_base027_low_55")} name="robot_base027_low_55" position={[0.475, 2.037, -0.615]} rotation={[-0.646, -0.553, 2.764]}>
+                <mesh name="Object_114" geometry={nodes.Object_114?.geometry} material={materials.robot_base} position={[-0.163, 1.764, -0.035]} />
+                <mesh name="Object_114001" geometry={nodes.Object_114001?.geometry} material={materials.robot_base} position={[-0.163, 1.765, -0.035]} />
+                <mesh name="Object_114002" geometry={nodes.Object_114002?.geometry} material={materials.robot_base} position={[-0.163, 1.763, -0.035]} />
+                <mesh name="Object_114003" geometry={nodes.Object_114003?.geometry} material={materials.robot_base} position={[-0.163, 1.762, -0.035]} />
+                <mesh name="Object_114004" geometry={nodes.Object_114004?.geometry} material={materials.robot_base} position={[-0.163, 1.765, -0.035]} />
+                <mesh name="Object_114005" geometry={nodes.Object_114005?.geometry} material={materials.robot_base} position={[-0.232, 1.765, -0.035]} />
+                <mesh name="Object_114006" geometry={nodes.Object_114006?.geometry} material={materials.robot_base} position={[-0.232, 1.764, -0.035]} />
+                <mesh name="Object_114007" geometry={nodes.Object_114007?.geometry} material={materials.robot_base} position={[-0.232, 1.763, -0.035]} />
+                <mesh name="Object_114008" geometry={nodes.Object_114008?.geometry} material={materials.robot_base} position={[-0.232, 1.762, -0.035]} />
+                <mesh name="Object_114009" geometry={nodes.Object_114009?.geometry} material={materials.robot_base} position={[-0.232, 1.765, -0.035]} />
+                <mesh name="Object_114010" geometry={nodes.Object_114010?.geometry} material={materials.robot_base} position={[-0.163, 1.765, 0.035]} />
+                <mesh name="Object_114011" geometry={nodes.Object_114011?.geometry} material={materials.robot_base} position={[-0.163, 1.764, 0.035]} />
+                <mesh name="Object_114012" geometry={nodes.Object_114012?.geometry} material={materials.robot_base} position={[-0.163, 1.763, 0.035]} />
+                <mesh name="Object_114013" geometry={nodes.Object_114013?.geometry} material={materials.robot_base} position={[-0.163, 1.762, 0.035]} />
+                <mesh name="Object_114014" geometry={nodes.Object_114014?.geometry} material={materials.robot_base} position={[-0.163, 1.765, 0.035]} />
+                <mesh name="Object_114015" geometry={nodes.Object_114015?.geometry} material={materials.robot_base} position={[-0.232, 1.765, 0.035]} />
+                <mesh name="Object_114016" geometry={nodes.Object_114016?.geometry} material={materials.robot_base} position={[-0.232, 1.764, 0.035]} />
+                <mesh name="Object_114017" geometry={nodes.Object_114017?.geometry} material={materials.robot_base} position={[-0.232, 1.763, 0.035]} />
+                <mesh name="Object_114018" geometry={nodes.Object_114018?.geometry} material={materials.robot_base} position={[-0.232, 1.762, 0.035]} />
+                <mesh name="Object_114019" geometry={nodes.Object_114019?.geometry} material={materials.robot_base} position={[-0.232, 1.765, 0.035]} />
+              </group>
+              <group ref={setRef("robot_base028_low_56")} name="robot_base028_low_56" position={[0.898, 0.517, -1.161]} rotation={[-1.713, 0.109, 2.491]}>
+                <mesh name="Object_116" geometry={nodes.Object_116?.geometry} material={materials.robot_base} position={[-0.208, 1.437, 0.035]} />
+                <mesh name="Object_116001" geometry={nodes.Object_116001?.geometry} material={materials.robot_base} position={[-0.208, 1.435, 0.035]} />
+                <mesh name="Object_116002" geometry={nodes.Object_116002?.geometry} material={materials.robot_base} position={[-0.208, 1.438, 0.035]} />
+                <mesh name="Object_116003" geometry={nodes.Object_116003?.geometry} material={materials.robot_base} position={[-0.208, 1.439, 0.035]} />
+                <mesh name="Object_116004" geometry={nodes.Object_116004?.geometry} material={materials.robot_base} position={[-0.208, 1.435, 0.035]} />
+                <mesh name="Object_116005" geometry={nodes.Object_116005?.geometry} material={materials.robot_base} position={[-0.139, 1.435, 0.035]} />
+                <mesh name="Object_116006" geometry={nodes.Object_116006?.geometry} material={materials.robot_base} position={[-0.139, 1.437, 0.035]} />
+                <mesh name="Object_116007" geometry={nodes.Object_116007?.geometry} material={materials.robot_base} position={[-0.139, 1.438, 0.035]} />
+                <mesh name="Object_116008" geometry={nodes.Object_116008?.geometry} material={materials.robot_base} position={[-0.139, 1.439, 0.035]} />
+                <mesh name="Object_116009" geometry={nodes.Object_116009?.geometry} material={materials.robot_base} position={[-0.139, 1.435, 0.035]} />
+                <mesh name="Object_116010" geometry={nodes.Object_116010?.geometry} material={materials.robot_base} position={[-0.208, 1.437, -0.035]} />
+                <mesh name="Object_116011" geometry={nodes.Object_116011?.geometry} material={materials.robot_base} position={[-0.208, 1.435, -0.035]} />
+                <mesh name="Object_116012" geometry={nodes.Object_116012?.geometry} material={materials.robot_base} position={[-0.208, 1.438, -0.035]} />
+                <mesh name="Object_116013" geometry={nodes.Object_116013?.geometry} material={materials.robot_base} position={[-0.208, 1.439, -0.035]} />
+                <mesh name="Object_116014" geometry={nodes.Object_116014?.geometry} material={materials.robot_base} position={[-0.208, 1.435, -0.035]} />
+                <mesh name="Object_116015" geometry={nodes.Object_116015?.geometry} material={materials.robot_base} position={[-0.139, 1.437, -0.035]} />
+                <mesh name="Object_116016" geometry={nodes.Object_116016?.geometry} material={materials.robot_base} position={[-0.139, 1.435, -0.035]} />
+                <mesh name="Object_116017" geometry={nodes.Object_116017?.geometry} material={materials.robot_base} position={[-0.139, 1.438, -0.035]} />
+                <mesh name="Object_116018" geometry={nodes.Object_116018?.geometry} material={materials.robot_base} position={[-0.139, 1.439, -0.035]} />
+                <mesh name="Object_116019" geometry={nodes.Object_116019?.geometry} material={materials.robot_base} position={[-0.139, 1.435, -0.035]} />
+              </group>
+              <group ref={setRef("robot_base029_low_57")} name="robot_base029_low_57" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_118" geometry={nodes.Object_118?.geometry} material={materials.robot_base} position={[-0.352, 1, -0.048]} />
+                <mesh name="Object_118001" geometry={nodes.Object_118001?.geometry} material={materials.robot_base} position={[-0.353, 1, -0.048]} />
+                <mesh name="Object_118002" geometry={nodes.Object_118002?.geometry} material={materials.robot_base} position={[-0.351, 1, -0.048]} />
+                <mesh name="Object_118003" geometry={nodes.Object_118003?.geometry} material={materials.robot_base} position={[-0.35, 1, -0.048]} />
+                <mesh name="Object_118004" geometry={nodes.Object_118004?.geometry} material={materials.robot_base} position={[-0.353, 1, -0.048]} />
+                <mesh name="Object_118005" geometry={nodes.Object_118005?.geometry} material={materials.robot_base} position={[-0.352, 1, 0.048]} />
+                <mesh name="Object_118006" geometry={nodes.Object_118006?.geometry} material={materials.robot_base} position={[-0.353, 1, 0.048]} />
+                <mesh name="Object_118007" geometry={nodes.Object_118007?.geometry} material={materials.robot_base} position={[-0.351, 1, 0.048]} />
+                <mesh name="Object_118008" geometry={nodes.Object_118008?.geometry} material={materials.robot_base} position={[-0.35, 1, 0.048]} />
+                <mesh name="Object_118009" geometry={nodes.Object_118009?.geometry} material={materials.robot_base} position={[-0.353, 1, 0.048]} />
+                <mesh name="Object_118010" geometry={nodes.Object_118010?.geometry} material={materials.robot_base} position={[-0.353, 0.896, -0.048]} />
+                <mesh name="Object_118011" geometry={nodes.Object_118011?.geometry} material={materials.robot_base} position={[-0.352, 0.896, -0.048]} />
+                <mesh name="Object_118012" geometry={nodes.Object_118012?.geometry} material={materials.robot_base} position={[-0.351, 0.896, -0.048]} />
+                <mesh name="Object_118013" geometry={nodes.Object_118013?.geometry} material={materials.robot_base} position={[-0.35, 0.896, -0.048]} />
+                <mesh name="Object_118014" geometry={nodes.Object_118014?.geometry} material={materials.robot_base} position={[-0.353, 0.896, -0.048]} />
+                <mesh name="Object_118015" geometry={nodes.Object_118015?.geometry} material={materials.robot_base} position={[-0.352, 0.896, 0.048]} />
+                <mesh name="Object_118016" geometry={nodes.Object_118016?.geometry} material={materials.robot_base} position={[-0.353, 0.896, 0.048]} />
+                <mesh name="Object_118017" geometry={nodes.Object_118017?.geometry} material={materials.robot_base} position={[-0.351, 0.896, 0.048]} />
+                <mesh name="Object_118018" geometry={nodes.Object_118018?.geometry} material={materials.robot_base} position={[-0.35, 0.896, 0.048]} />
+                <mesh name="Object_118019" geometry={nodes.Object_118019?.geometry} material={materials.robot_base} position={[-0.353, 0.896, 0.048]} />
+              </group>
+              <group ref={setRef("robot_base030_low_58")} name="robot_base030_low_58" position={[-0.124, 0.097, 0.16]} rotation={[2.132, 0.39, -2.597]}>
+                <mesh name="Object_120" geometry={nodes.Object_120?.geometry} material={materials.robot_base} position={[-0.355, 0.311, -0.048]} />
+                <mesh name="Object_120001" geometry={nodes.Object_120001?.geometry} material={materials.robot_base} position={[-0.357, 0.311, -0.048]} />
+                <mesh name="Object_120002" geometry={nodes.Object_120002?.geometry} material={materials.robot_base} position={[-0.355, 0.311, -0.048]} />
+                <mesh name="Object_120003" geometry={nodes.Object_120003?.geometry} material={materials.robot_base} position={[-0.354, 0.311, -0.048]} />
+                <mesh name="Object_120004" geometry={nodes.Object_120004?.geometry} material={materials.robot_base} position={[-0.356, 0.311, -0.048]} />
+                <mesh name="Object_120005" geometry={nodes.Object_120005?.geometry} material={materials.robot_base} position={[-0.355, 0.311, 0.048]} />
+                <mesh name="Object_120006" geometry={nodes.Object_120006?.geometry} material={materials.robot_base} position={[-0.357, 0.311, 0.048]} />
+                <mesh name="Object_120007" geometry={nodes.Object_120007?.geometry} material={materials.robot_base} position={[-0.355, 0.311, 0.048]} />
+                <mesh name="Object_120008" geometry={nodes.Object_120008?.geometry} material={materials.robot_base} position={[-0.354, 0.311, 0.048]} />
+                <mesh name="Object_120009" geometry={nodes.Object_120009?.geometry} material={materials.robot_base} position={[-0.356, 0.311, 0.048]} />
+                <mesh name="Object_120010" geometry={nodes.Object_120010?.geometry} material={materials.robot_base} position={[-0.355, 0.206, -0.048]} />
+                <mesh name="Object_120011" geometry={nodes.Object_120011?.geometry} material={materials.robot_base} position={[-0.357, 0.206, -0.048]} />
+                <mesh name="Object_120012" geometry={nodes.Object_120012?.geometry} material={materials.robot_base} position={[-0.355, 0.206, -0.048]} />
+                <mesh name="Object_120013" geometry={nodes.Object_120013?.geometry} material={materials.robot_base} position={[-0.354, 0.206, -0.048]} />
+                <mesh name="Object_120014" geometry={nodes.Object_120014?.geometry} material={materials.robot_base} position={[-0.356, 0.206, -0.048]} />
+                <mesh name="Object_120015" geometry={nodes.Object_120015?.geometry} material={materials.robot_base} position={[-0.357, 0.206, 0.048]} />
+                <mesh name="Object_120016" geometry={nodes.Object_120016?.geometry} material={materials.robot_base} position={[-0.355, 0.206, 0.048]} />
+                <mesh name="Object_120017" geometry={nodes.Object_120017?.geometry} material={materials.robot_base} position={[-0.355, 0.206, 0.048]} />
+                <mesh name="Object_120018" geometry={nodes.Object_120018?.geometry} material={materials.robot_base} position={[-0.354, 0.206, 0.048]} />
+                <mesh name="Object_120019" geometry={nodes.Object_120019?.geometry} material={materials.robot_base} position={[-0.356, 0.206, 0.048]} />
+              </group>
+              <group ref={setRef("robot_base031_low_59")} name="robot_base031_low_59" position={[0, -0.001, 0]} rotation={[-Math.PI, 0.658, -Math.PI]}>
+                <mesh name="Object_122" geometry={nodes.Object_122?.geometry} material={materials.robot_base} position={[-0.066, 0.321, 0.05]} />
+                <mesh name="Object_122001" geometry={nodes.Object_122001?.geometry} material={materials.robot_base} position={[-0.066, 0.32, 0.05]} />
+                <mesh name="Object_122002" geometry={nodes.Object_122002?.geometry} material={materials.robot_base} position={[-0.066, 0.319, 0.05]} />
+                <mesh name="Object_122003" geometry={nodes.Object_122003?.geometry} material={materials.robot_base} position={[-0.066, 0.318, 0.05]} />
+                <mesh name="Object_122004" geometry={nodes.Object_122004?.geometry} material={materials.robot_base} position={[-0.066, 0.321, 0.05]} />
+                <mesh name="Object_122005" geometry={nodes.Object_122005?.geometry} material={materials.robot_base} position={[0.034, 0.32, 0.05]} />
+                <mesh name="Object_122006" geometry={nodes.Object_122006?.geometry} material={materials.robot_base} position={[0.034, 0.321, 0.05]} />
+                <mesh name="Object_122007" geometry={nodes.Object_122007?.geometry} material={materials.robot_base} position={[0.034, 0.319, 0.05]} />
+                <mesh name="Object_122008" geometry={nodes.Object_122008?.geometry} material={materials.robot_base} position={[0.034, 0.318, 0.05]} />
+                <mesh name="Object_122009" geometry={nodes.Object_122009?.geometry} material={materials.robot_base} position={[0.034, 0.321, 0.05]} />
+                <mesh name="Object_122010" geometry={nodes.Object_122010?.geometry} material={materials.robot_base} position={[-0.066, 0.321, -0.05]} />
+                <mesh name="Object_122011" geometry={nodes.Object_122011?.geometry} material={materials.robot_base} position={[-0.066, 0.32, -0.05]} />
+                <mesh name="Object_122012" geometry={nodes.Object_122012?.geometry} material={materials.robot_base} position={[-0.066, 0.319, -0.05]} />
+                <mesh name="Object_122013" geometry={nodes.Object_122013?.geometry} material={materials.robot_base} position={[-0.066, 0.318, -0.05]} />
+                <mesh name="Object_122014" geometry={nodes.Object_122014?.geometry} material={materials.robot_base} position={[-0.066, 0.321, -0.05]} />
+                <mesh name="Object_122015" geometry={nodes.Object_122015?.geometry} material={materials.robot_base} position={[0.034, 0.321, -0.05]} />
+                <mesh name="Object_122016" geometry={nodes.Object_122016?.geometry} material={materials.robot_base} position={[0.034, 0.32, -0.05]} />
+                <mesh name="Object_122017" geometry={nodes.Object_122017?.geometry} material={materials.robot_base} position={[0.034, 0.319, -0.05]} />
+                <mesh name="Object_122018" geometry={nodes.Object_122018?.geometry} material={materials.robot_base} position={[0.034, 0.318, -0.05]} />
+                <mesh name="Object_122019" geometry={nodes.Object_122019?.geometry} material={materials.robot_base} position={[0.034, 0.321, -0.05]} />
+              </group>
+              <group ref={setRef("robot_base033_low_62")} name="robot_base033_low_62" position={[0.618, 0.687, -0.204]} rotation={[2.132, 0.39, -2.597]} scale={1.085}>
+                <mesh name="Object_128" geometry={nodes.Object_128?.geometry} material={materials.robot_base} />
+              </group>
+              <group ref={setRef("robot_base035_low_63")} name="robot_base035_low_63" position={[0.898, 0.517, -1.161]} rotation={[-1.713, 0.109, 2.491]}>
+                <mesh name="Object_130" geometry={nodes.Object_130?.geometry} material={materials.robot_base} position={[0.087, 1.466, 0]} />
+                <mesh name="Object_130001" geometry={nodes.Object_130001?.geometry} material={materials.robot_base} position={[0.083, 1.466, 0]} />
+              </group>
+              <group ref={setRef("robot_base_low_51")} name="robot_base_low_51" position={[0.898, 0.517, -1.161]} rotation={[-1.713, 0.109, 2.491]}>
+                <mesh name="Object_106" geometry={nodes.Object_106?.geometry} material={materials.robot_base} position={[0.086, 1.466, 0]} />
+              </group>
+              <group ref={setRef("robot_base001_low_30")} name="robot_base001_low_30" position={[0, -0.001, 0]}>
+                <mesh name="Object_64" geometry={nodes.Object_64?.geometry} material={materials.robot_base} position={[-0.083, 0.026, 0.083]} />
+                <mesh name="Object_64001" geometry={nodes.Object_64001?.geometry} material={materials.robot_base} position={[-0.083, 0.026, -0.083]} />
+                <mesh name="Object_64002" geometry={nodes.Object_64002?.geometry} material={materials.robot_base} position={[0.083, 0.026, 0.083]} />
+                <mesh name="Object_64003" geometry={nodes.Object_64003?.geometry} material={materials.robot_base} position={[0.083, 0.026, -0.083]} />
+                <mesh name="Object_64004" geometry={nodes.Object_64004?.geometry} material={materials.robot_base} position={[0, 0.076, 0]} />
+                <mesh name="Object_64005" geometry={nodes.Object_64005?.geometry} material={materials.robot_base} position={[0, 0.013, 0]} />
+                <mesh name="Object_64006" geometry={nodes.Object_64006?.geometry} material={materials.robot_base} position={[0, 0.049, 0]} />
+                <mesh name="Object_64007" geometry={nodes.Object_64007?.geometry} material={materials.robot_base} position={[-0.083, 0.038, -0.083]} />
+                <mesh name="Object_64008" geometry={nodes.Object_64008?.geometry} material={materials.robot_base} position={[0.082, 0.038, -0.083]} />
+                <mesh name="Object_64009" geometry={nodes.Object_64009?.geometry} material={materials.robot_base} position={[-0.082, 0.038, 0.083]} />
+                <mesh name="Object_64010" geometry={nodes.Object_64010?.geometry} material={materials.robot_base} position={[0.082, 0.038, 0.083]} />
+                <mesh name="Object_64011" geometry={nodes.Object_64011?.geometry} material={materials.robot_base} />
+              </group>
+              <group ref={setRef("robot_base010_low_29")} name="robot_base010_low_29" position={[0, 0.074, 0]}>
+                <mesh name="Object_62" geometry={nodes.Object_62?.geometry} material={materials.robot_base} position={[0.014, 0.009, -0.012]} />
+                <mesh name="Object_62001" geometry={nodes.Object_62001?.geometry} material={materials.robot_base} position={[-0.058, 0.009, 0.051]} />
+              </group>
+              <group ref={setRef("robot_base032_low_60")} name="robot_base032_low_60" position={[0, -0.001, 0]}>
+                <mesh name="Object_124" geometry={nodes.Object_124?.geometry} material={materials.robot_base} position={[-0.083, 0.03, 0.083]} />
+                <mesh name="Object_124001" geometry={nodes.Object_124001?.geometry} material={materials.robot_base} position={[-0.083, 0.033, 0.083]} />
+                <mesh name="Object_124002" geometry={nodes.Object_124002?.geometry} material={materials.robot_base} position={[-0.083, 0.029, 0.083]} />
+                <mesh name="Object_124003" geometry={nodes.Object_124003?.geometry} material={materials.robot_base} position={[-0.083, 0.027, 0.083]} />
+                <mesh name="Object_124004" geometry={nodes.Object_124004?.geometry} material={materials.robot_base} position={[-0.083, 0.032, 0.083]} />
+                <mesh name="Object_124005" geometry={nodes.Object_124005?.geometry} material={materials.robot_base} position={[0.083, 0.033, 0.083]} />
+                <mesh name="Object_124006" geometry={nodes.Object_124006?.geometry} material={materials.robot_base} position={[0.083, 0.03, 0.083]} />
+                <mesh name="Object_124007" geometry={nodes.Object_124007?.geometry} material={materials.robot_base} position={[0.083, 0.029, 0.083]} />
+                <mesh name="Object_124008" geometry={nodes.Object_124008?.geometry} material={materials.robot_base} position={[0.083, 0.027, 0.083]} />
+                <mesh name="Object_124009" geometry={nodes.Object_124009?.geometry} material={materials.robot_base} position={[0.083, 0.032, 0.083]} />
+                <mesh name="Object_124010" geometry={nodes.Object_124010?.geometry} material={materials.robot_base} position={[-0.083, 0.033, -0.083]} />
+                <mesh name="Object_124011" geometry={nodes.Object_124011?.geometry} material={materials.robot_base} position={[-0.083, 0.03, -0.083]} />
+                <mesh name="Object_124012" geometry={nodes.Object_124012?.geometry} material={materials.robot_base} position={[-0.083, 0.029, -0.083]} />
+                <mesh name="Object_124013" geometry={nodes.Object_124013?.geometry} material={materials.robot_base} position={[-0.083, 0.027, -0.083]} />
+                <mesh name="Object_124014" geometry={nodes.Object_124014?.geometry} material={materials.robot_base} position={[-0.083, 0.032, -0.083]} />
+                <mesh name="Object_124015" geometry={nodes.Object_124015?.geometry} material={materials.robot_base} position={[0.083, 0.033, -0.083]} />
+                <mesh name="Object_124016" geometry={nodes.Object_124016?.geometry} material={materials.robot_base} position={[0.083, 0.03, -0.083]} />
+                <mesh name="Object_124017" geometry={nodes.Object_124017?.geometry} material={materials.robot_base} position={[0.083, 0.029, -0.083]} />
+                <mesh name="Object_124018" geometry={nodes.Object_124018?.geometry} material={materials.robot_base} position={[0.083, 0.027, -0.083]} />
+                <mesh name="Object_124019" geometry={nodes.Object_124019?.geometry} material={materials.robot_base} position={[0.083, 0.032, -0.083]} />
+              </group>
+            </group>
+          </group>
+        </group>
+      </group>
+
+      {/* ── 3D LABELS ── */}
+      {Object.entries(EXPLOSION_OFFSETS).map(([name, offset]) => {
+        if (!offset.label) return null;
+        return (
+          <group key={`label-${name}`} ref={(el) => (labelRefs.current[name] = el)}>
+            <Html
+              position={offset.labelOffset || [0, 0, 0]}
+              center
+              zIndexRange={[100, 0]}
+            >
+              <div className="part-label" style={{ opacity: 0, willChange: 'opacity, transform' }}>
+                <div className="flex flex-col items-center">
+                  {/* Subtle connecting line down to the part */}
+                  <div className="w-[1px] h-6 bg-gradient-to-b from-slate-900 to-transparent mb-1" />
+
+                  {/* Dark Premium Label Box */}
+                  <div className="bg-slate-900/95 backdrop-blur-md text-slate-100 border border-slate-700/50 shadow-2xl px-3 py-1.5 rounded-md text-[10px] sm:text-xs font-mono tracking-widest whitespace-nowrap flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)]" />
+                    {offset.label}
+                  </div>
+                </div>
+              </div>
+            </Html>
+          </group>
+        );
+      })}
+    </group>
+  );
+}

@@ -21,7 +21,7 @@ import perception1 from "@/assets/agentic/perception1.png";
 type Hue = "blue" | "copper" | "emerald";
 
 const layers: Array<{
-  n: string; icon: React.ElementType; name: string; short: string;
+  n: string; icon: any; name: string; short: string;
   similar: string; branch: string; hue: Hue; what: string;
   functions: string[]; tech: string[]; inputs: string; outputs: string; why: string;
   exampleImage?: string; exampleLabel?: string;

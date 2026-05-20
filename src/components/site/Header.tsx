@@ -6,6 +6,7 @@ import logoImg from "@/assets/logos/roboparadigm-logo.png";
 const nav = [
   { to: "/", label: "Home" },
   { to: "/about", label: "About" },
+  { to: "/3d-arm", label: "3D Arm" },
   { to: "/architecture", label: "Architecture" },
   { to: "/projects", label: "Projects" },
   { to: "/technology", label: "Technology" },
