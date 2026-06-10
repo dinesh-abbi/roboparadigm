@@ -1,10 +1,11 @@
 import { Suspense, useRef, useState, useEffect } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF, useAnimations } from "@react-three/drei";
-import { useScroll, useTransform, motion } from "framer-motion";
+import { useScroll, useTransform, motion, AnimatePresence } from "framer-motion";
 import { Cpu, MousePointerClick, ZoomIn, ZoomOut } from "lucide-react";
 // @ts-ignore
 import { ExplodedScene } from "./ExplodedArmModel";
+import { Model as RoboarmModel } from "../../Roboarm";
 
 // ─── Camera Controller ────────────────────────────────────────────────────────
 function CameraController({ zoom }: { zoom: number }) {
@@ -37,6 +38,7 @@ useGLTF.preload('/black-honey.glb');
 export default function Model3D() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
+  const [activeTab, setActiveTab] = useState<'exploded' | 'roboarm'>('exploded');
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -49,10 +51,10 @@ export default function Model3D() {
   const detailOpacity = useTransform(scrollYProgress, [0.60, 0.70, 0.90, 1], [0, 1, 1, 1]);
 
   return (
-    <div ref={containerRef} className="relative w-full h-[300vh] scroll-track bg-background">
+    <div ref={containerRef} className={`relative w-full h-[300vh] scroll-track bg-background`}>
 
       {/* Sticky viewport */}
-      <div className="sticky top-[72px] h-[calc(100vh-72px)] w-full overflow-hidden border-y border-border"
+      <div className={`sticky top-[72px] h-[calc(100vh-72px)] w-full overflow-hidden border-y border-border`}
         style={{
           background: `
     linear-gradient(
@@ -74,6 +76,24 @@ export default function Model3D() {
         <div className="absolute top-1/4 right-[-80px] w-[600px] h-[600px] rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(255,220,130,0.3) 0%, transparent 70%)' }} />
         <div className="absolute bottom-[-60px] left-[-60px] w-[500px] h-[500px] rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(232,100,20,0.25) 0%, transparent 70%)' }} />
 
+        {/* Tabs */}
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-surface-elevated/80 backdrop-blur-md border border-border p-1.5 rounded-full shadow-lg">
+          <button
+            onClick={() => { setActiveTab('exploded'); setZoom(1); }}
+            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'exploded' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
+              }`}
+          >
+            Exploded Arm
+          </button>
+          <button
+            onClick={() => { setActiveTab('roboarm'); setZoom(1); }}
+            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${activeTab === 'roboarm' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
+              }`}
+          >
+            Roboarm
+          </button>
+        </div>
+
         {/* Instruction pill */}
         <div className="absolute bottom-8 left-8 z-20 pointer-events-none flex items-center gap-3 bg-surface-elevated/80 backdrop-blur-md border border-border px-4 py-2.5 rounded-full shadow-lg">
           <MousePointerClick className="h-4 w-4 text-primary" />
@@ -85,7 +105,7 @@ export default function Model3D() {
         {/* Zoom controls */}
         <div className="absolute bottom-8 right-8 z-20 flex items-center gap-2 bg-surface-elevated/90 backdrop-blur-md border border-border px-3 py-1.5 rounded-full shadow-2xl">
           <button
-            onClick={() => setZoom(prev => Math.max(0.5, prev - 0.25))}
+            onClick={() => setZoom(prev => Math.max(0.2, prev - 0.25))}
             className="h-8 w-8 rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
             title="Zoom Out"
           >
@@ -95,7 +115,7 @@ export default function Model3D() {
             Scale: {Math.round(zoom * 100)}%
           </span>
           <button
-            onClick={() => setZoom(prev => Math.min(2.5, prev + 0.25))}
+            onClick={() => setZoom(prev => Math.min(4.0, prev + 0.25))}
             className="h-8 w-8 rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-white/10 active:scale-90 transition-all cursor-pointer"
             title="Zoom In"
           >
@@ -104,8 +124,7 @@ export default function Model3D() {
         </div>
 
         {/* HUD status overlays */}
-        <div className="absolute top-12 left-12 md:top-16 md:left-16 z-20 pointer-events-none">
-
+        <div className="absolute top-12 left-12 md:top-24 md:left-16 z-20 pointer-events-none">
           <motion.div style={{ opacity: initialOpacity }} className="absolute top-0 left-0">
             <div className="flex items-center gap-2 mb-2">
               <span className="relative flex h-2 w-2">
@@ -141,7 +160,6 @@ export default function Model3D() {
               Deep dive into the localized precision gearboxes, encoders, and the highly adaptable end effector assembly.
             </p>
           </motion.div>
-
         </div>
 
         {/* 3D Canvas */}
@@ -183,9 +201,15 @@ export default function Model3D() {
               decay={1.5}
             />
             <Suspense fallback={null}>
-              <group scale={4} position={[0, -2, 0]}>
-                <ModelBridge scrollYProgress={scrollYProgress} />
-              </group>
+              {activeTab === 'exploded' ? (
+                <group scale={4} position={[0, -2, 0]}>
+                  <ModelBridge scrollYProgress={scrollYProgress} />
+                </group>
+              ) : (
+                <group scale={0.02} position={[0, -2.5, 0]}>
+                  <RoboarmModel scrollYProgress={scrollYProgress} />
+                </group>
+              )}
             </Suspense>
 
             <CameraController zoom={zoom} />

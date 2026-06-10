@@ -12,6 +12,7 @@ const nav = [
   { to: "/technology", label: "Technology" },
   { to: "/research", label: "Research" },
   { to: "/learning", label: "Programs" },
+  { to: "/courses", label: "Courses" },
   { to: "/collaborations", label: "Collaborate" },
 ] as const;
 

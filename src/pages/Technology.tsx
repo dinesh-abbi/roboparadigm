@@ -1,57 +1,68 @@
 import { PageHero, SectionLabel } from "@/components/site/primitives";
 import prof1 from "@/assets/professional/1.webp";
-import prof3 from "@/assets/professional/3.webp";
+import techPerception from "@/assets/agentic/tech_perception.png";
+import techMotion from "@/assets/agentic/tech_motion.png";
+import { motion } from "framer-motion";
 
-
-
-/* Tech areas from PDF — displayed as styled cards with no per-card images */
 const techAreas = [
   {
+    category: "Hardware",
+    desc: "Robotic Arms (7-DOF), Mobile Manipulators, Servo Motors, Custom 3D-Printed Structures.",
+    span: "col-span-1 md:col-span-2 lg:col-span-2",
+    hue: "copper" as const,
+    bgImg: prof1,
+  },
+  {
     category: "AI and Perception",
-    items: ["Computer Vision", "Object Detection", "Image Segmentation", "Pose Estimation", "Scene Understanding", "Agentic AI Pipelines"],
+    desc: "Computer Vision, Object Detection, Scene Understanding, Agentic AI.",
+    span: "col-span-1 md:col-span-1 lg:col-span-1",
     hue: "blue" as const,
+    bgImg: techPerception,
   },
   {
     category: "Planning and Autonomy",
-    items: ["Task Planning", "Agentic Workflows", "MoveIt Motion Planning", "Nav2 Navigation", "SLAM", "Behavior Trees"],
+    desc: "Task Planning, Agentic Workflows, Nav2, Behavior Trees.",
+    span: "col-span-1 md:col-span-1 lg:col-span-1",
     hue: "blue" as const,
+    bgImg: techMotion,
   },
   {
     category: "Robotics Middleware",
-    items: ["ROS 2 (Iron / Humble)", "MoveIt 2", "Gazebo Sim", "Nav2", "ros2_control", "TF2"],
+    desc: "ROS 2 (Iron / Humble), MoveIt 2, Gazebo Sim, ros2_control.",
+    span: "col-span-1 md:col-span-1 lg:col-span-1",
     hue: "blue" as const,
   },
   {
     category: "Control Systems",
-    items: ["PID Control", "Trajectory Generation", "Servo Diagnostics", "Motion Execution", "Feedback Control", "State Estimation"],
-    hue: "copper" as const,
-  },
-  {
-    category: "Hardware",
-    items: ["Robotic Arms (7-DOF)", "Mobile Manipulators", "Servo Motors", "Motor Drivers", "Raspberry Pi", "Microcontrollers", "3D-Printed Structures"],
-    hue: "copper" as const,
-  },
-  {
-    category: "Power Systems",
-    items: ["Battery Packs", "BMS (Battery Management)", "DC-DC Converters", "Power Distribution", "Protection Circuits", "Voltage Regulation"],
+    desc: "PID Control, Trajectory Generation, Servo Diagnostics, State Estimation.",
+    span: "col-span-1 md:col-span-2 lg:col-span-2",
     hue: "copper" as const,
   },
   {
     category: "Robot Learning",
-    items: ["Learning from Demonstration", "SmolVLA", "Pi0.5 (Exploration)", "Vision-Language-Action Models", "Leader Arm", "Demonstration Data"],
+    desc: "Learning from Demonstration, SmolVLA, Pi0.5.",
+    span: "col-span-1 md:col-span-1 lg:col-span-1",
     hue: "emerald" as const,
-  },
-  {
-    category: "Software Infrastructure",
-    items: ["Python", "C++", "Docker", "GPU Compute", "Training Pipelines", "Data Logging", "Workflow Orchestration"],
-    hue: "blue" as const,
   },
 ];
 
 const hueMap = {
-  blue:    { border: "border-primary/25", bg: "bg-primary/6",  text: "text-primary",      dot: "bg-primary" },
-  copper:  { border: "border-accent/25",  bg: "bg-accent/6",   text: "text-accent",        dot: "bg-accent" },
-  emerald: { border: "border-status-demo/25", bg: "bg-status-demo/6", text: "text-status-demo", dot: "bg-status-demo" },
+  blue: { border: "border-primary/25", borderHover: "group-hover:border-primary/50", bg: "bg-primary/5", text: "text-primary" },
+  copper: { border: "border-accent/25", borderHover: "group-hover:border-accent/50", bg: "bg-accent/5", text: "text-accent" },
+  emerald: { border: "border-status-demo/25", borderHover: "group-hover:border-status-demo/50", bg: "bg-status-demo/5", text: "text-status-demo" },
+};
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.1 },
+  },
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { y: 0, opacity: 1, transition: { duration: 0.5, ease: "easeOut" } },
 };
 
 export default function Technology() {
@@ -63,78 +74,93 @@ export default function Technology() {
         subtitle="Our technology stack enables robots to move beyond fixed automation. We combine perception, planning, control, hardware interfaces, power design, mechanical engineering, and learning so that robots can adapt and perform real-world tasks with intelligence and flexibility."
       />
 
-      {/* 4×2 grid — styled text cards with color-coding, no images */}
-      <section className="border-b border-border">
-        <div className="mx-auto max-w-7xl px-6 py-20 md:py-28">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {techAreas.map((t) => {
+      {/* Tech Stack Bento Grid */}
+      <section className="relative border-b border-border overflow-hidden bg-background">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+        
+        <div className="relative mx-auto max-w-7xl px-6 py-20 md:py-28">
+          <SectionLabel>Full-Stack Approach</SectionLabel>
+          <h2 className="mt-6 mb-12 font-display text-3xl font-bold">Integrated Core Technologies</h2>
+          
+          <motion.div 
+            className="grid grid-cols-1 md:grid-cols-4 gap-4"
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+          >
+            {techAreas.map((t, idx) => {
               const h = hueMap[t.hue];
               return (
-                <div
-                  key={t.category}
-                  className={`rounded-xl border ${h.border} ${h.bg} p-5 hover:shadow-lg transition-all group`}
+                <motion.div
+                  key={idx}
+                  variants={itemVariants}
+                  className={`group relative overflow-hidden rounded-2xl border ${h.border} ${h.borderHover} ${h.bg} backdrop-blur-md p-6 min-h-[240px] transition-all duration-300 ${t.span}`}
                 >
-                  <div className={`font-mono text-[10px] uppercase tracking-widest ${h.text} mb-4`}>
-                    {t.category}
+                  {t.bgImg && (
+                    <>
+                      <div className="absolute inset-0 z-0">
+                        <img src={t.bgImg} alt={t.category} className="w-full h-full object-cover opacity-30 group-hover:opacity-60 group-hover:scale-105 transition-all duration-700" />
+                      </div>
+                      <div className="absolute inset-0 z-0 bg-gradient-to-t from-background/95 via-background/60 to-transparent" />
+                    </>
+                  )}
+                  <div className="relative z-10 flex flex-col justify-end h-full">
+                    <div className={`font-mono text-xs uppercase tracking-widest ${h.text} mb-3 font-semibold`}>
+                      {t.category}
+                    </div>
+                    <h3 className="font-display font-medium text-lg md:text-xl text-foreground/90 group-hover:text-white transition-colors">
+                      {t.desc}
+                    </h3>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {t.items.map((item) => (
-                      <span
-                        key={item}
-                        className="inline-flex items-center rounded-md border border-border bg-background
-                                   px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
-                      >
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                </motion.div>
               );
             })}
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* Why our stack — one image, well-chosen */}
-      <section className="border-b border-border bg-surface/20">
+      {/* 5-Layer Architecture CSS Diagram */}
+      <section className="relative border-b border-border bg-surface/20 overflow-hidden">
         <div className="mx-auto max-w-7xl px-6 py-20">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <SectionLabel>Why Our Stack</SectionLabel>
+            <motion.div 
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+            >
+              <SectionLabel>5-Layer Architecture</SectionLabel>
               <h2 className="font-display text-3xl md:text-4xl font-bold leading-tight mt-6">
                 Purpose-built for<br />
                 <span className="text-gradient">intelligent automation.</span>
               </h2>
-              <p className="mt-6 text-muted-foreground leading-relaxed">
-                Our technology stack enables robots to move beyond fixed automation.
-                We combine perception, planning, control, hardware interfaces, power design,
-                mechanical engineering, and robot learning — so that robots can adapt to
-                changing environments and perform real-world tasks with higher intelligence.
+              <p className="mt-6 text-muted-foreground leading-relaxed text-lg">
+                We've designed a rigid yet flexible 5-layer architecture. From the physical hardware and embedded control to the higher-order cognitive layers governing task planning and AI perception.
               </p>
-              <div className="mt-8 grid grid-cols-2 gap-4">
-                {[
-                  { value: "ROS 2",    label: "Native middleware" },
-                  { value: "5-Layer",  label: "Architecture" },
-                  { value: "7-DOF",    label: "Arm precision" },
-                  { value: "Agentic",  label: "AI pipelines" },
-                ].map((s) => (
-                  <div key={s.label} className="rounded-lg border border-border bg-background p-4">
-                    <div className="font-display text-xl font-bold text-gradient-copper">{s.value}</div>
-                    <div className="font-mono text-[10px] text-muted-foreground mt-1 uppercase tracking-wider">{s.label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            </motion.div>
 
-            {/* prof1 — main robot platform, wide format */}
-            <div className="rounded-2xl overflow-hidden border border-border-strong">
-              <img
-                src={prof1}
-                alt="RoboParadigm full-stack robotics platform"
-                loading="lazy"
-                className="w-full h-auto"
-              />
-            </div>
+            <motion.div 
+              className="relative rounded-2xl border border-border-strong bg-background/50 p-8 flex flex-col gap-4 shadow-2xl"
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+            >
+              {[
+                { name: "L5: Cognitive & Agentic Planning", color: "bg-primary/20 border-primary/40 text-primary glow-primary" },
+                { name: "L4: AI Perception & Vision", color: "bg-primary/10 border-primary/30 text-primary/80" },
+                { name: "L3: Middleware & Motion Planning", color: "bg-muted/30 border-border text-foreground/80" },
+                { name: "L2: Embedded Control Systems", color: "bg-accent/10 border-accent/30 text-accent/80" },
+                { name: "L1: Physical Hardware & Power", color: "bg-accent/20 border-accent/40 text-accent glow-accent" },
+              ].map((layer, i) => (
+                <div key={i} className={`relative flex items-center justify-center p-4 lg:p-5 rounded-lg border backdrop-blur-sm transition-transform hover:scale-[1.02] cursor-default ${layer.color}`}>
+                  <span className="font-mono text-sm tracking-wide font-semibold">{layer.name}</span>
+                </div>
+              ))}
+              
+              <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-6 h-[85%] border-l-2 border-y-2 border-border/50 rounded-l-xl opacity-50" />
+            </motion.div>
           </div>
         </div>
       </section>

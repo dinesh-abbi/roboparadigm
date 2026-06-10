@@ -13,6 +13,7 @@ import { Route as TechnologyRouteImport } from './routes/technology'
 import { Route as ResearchRouteImport } from './routes/research'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as LearningRouteImport } from './routes/learning'
+import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CollaborationsRouteImport } from './routes/collaborations'
 import { Route as ArchitectureRouteImport } from './routes/architecture'
@@ -38,6 +39,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
 const LearningRoute = LearningRouteImport.update({
   id: '/learning',
   path: '/learning',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesRoute = CoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ContactRoute = ContactRouteImport.update({
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/architecture': typeof ArchitectureRoute
   '/collaborations': typeof CollaborationsRoute
   '/contact': typeof ContactRoute
+  '/courses': typeof CoursesRoute
   '/learning': typeof LearningRoute
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/architecture': typeof ArchitectureRoute
   '/collaborations': typeof CollaborationsRoute
   '/contact': typeof ContactRoute
+  '/courses': typeof CoursesRoute
   '/learning': typeof LearningRoute
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/architecture': typeof ArchitectureRoute
   '/collaborations': typeof CollaborationsRoute
   '/contact': typeof ContactRoute
+  '/courses': typeof CoursesRoute
   '/learning': typeof LearningRoute
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/architecture'
     | '/collaborations'
     | '/contact'
+    | '/courses'
     | '/learning'
     | '/projects'
     | '/research'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/architecture'
     | '/collaborations'
     | '/contact'
+    | '/courses'
     | '/learning'
     | '/projects'
     | '/research'
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/architecture'
     | '/collaborations'
     | '/contact'
+    | '/courses'
     | '/learning'
     | '/projects'
     | '/research'
@@ -154,6 +166,7 @@ export interface RootRouteChildren {
   ArchitectureRoute: typeof ArchitectureRoute
   CollaborationsRoute: typeof CollaborationsRoute
   ContactRoute: typeof ContactRoute
+  CoursesRoute: typeof CoursesRoute
   LearningRoute: typeof LearningRoute
   ProjectsRoute: typeof ProjectsRoute
   ResearchRoute: typeof ResearchRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/learning'
       fullPath: '/learning'
       preLoaderRoute: typeof LearningRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courses': {
+      id: '/courses'
+      path: '/courses'
+      fullPath: '/courses'
+      preLoaderRoute: typeof CoursesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -242,6 +262,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArchitectureRoute: ArchitectureRoute,
   CollaborationsRoute: CollaborationsRoute,
   ContactRoute: ContactRoute,
+  CoursesRoute: CoursesRoute,
   LearningRoute: LearningRoute,
   ProjectsRoute: ProjectsRoute,
   ResearchRoute: ResearchRoute,
