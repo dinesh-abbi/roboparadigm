@@ -18,7 +18,6 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CollaborationsRouteImport } from './routes/collaborations'
 import { Route as ArchitectureRouteImport } from './routes/architecture'
 import { Route as AboutRouteImport } from './routes/about'
-import { Route as R3dArmRouteImport } from './routes/3d-arm'
 import { Route as IndexRouteImport } from './routes/index'
 
 const TechnologyRoute = TechnologyRouteImport.update({
@@ -66,11 +65,6 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
-const R3dArmRoute = R3dArmRouteImport.update({
-  id: '/3d-arm',
-  path: '/3d-arm',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -79,7 +73,6 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/3d-arm': typeof R3dArmRoute
   '/about': typeof AboutRoute
   '/architecture': typeof ArchitectureRoute
   '/collaborations': typeof CollaborationsRoute
@@ -92,7 +85,6 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/3d-arm': typeof R3dArmRoute
   '/about': typeof AboutRoute
   '/architecture': typeof ArchitectureRoute
   '/collaborations': typeof CollaborationsRoute
@@ -106,7 +98,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/3d-arm': typeof R3dArmRoute
   '/about': typeof AboutRoute
   '/architecture': typeof ArchitectureRoute
   '/collaborations': typeof CollaborationsRoute
@@ -121,7 +112,6 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/3d-arm'
     | '/about'
     | '/architecture'
     | '/collaborations'
@@ -134,7 +124,6 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/3d-arm'
     | '/about'
     | '/architecture'
     | '/collaborations'
@@ -147,7 +136,6 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/3d-arm'
     | '/about'
     | '/architecture'
     | '/collaborations'
@@ -161,7 +149,6 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  R3dArmRoute: typeof R3dArmRoute
   AboutRoute: typeof AboutRoute
   ArchitectureRoute: typeof ArchitectureRoute
   CollaborationsRoute: typeof CollaborationsRoute
@@ -238,13 +225,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/3d-arm': {
-      id: '/3d-arm'
-      path: '/3d-arm'
-      fullPath: '/3d-arm'
-      preLoaderRoute: typeof R3dArmRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -257,7 +237,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  R3dArmRoute: R3dArmRoute,
   AboutRoute: AboutRoute,
   ArchitectureRoute: ArchitectureRoute,
   CollaborationsRoute: CollaborationsRoute,
