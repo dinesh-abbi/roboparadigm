@@ -1,19 +1,18 @@
-import { Hero } from "./Hero";
-import { ShortIntro } from "./ShortIntro";
-import { WhatWeDo } from "./WhatWeDo";
-import { Capabilities } from "./Capabilities";
+import { ArmShowcase } from "./ArmShowcase";
 import { ProjectHighlights } from "./ProjectHighlights";
 import { WhyRoboParadigm } from "./WhyRoboParadigm";
+import { Newsletters } from "./Newsletters";
 
 export default function Home() {
   return (
     <>
-      <Hero />
-      <ShortIntro />
-      <WhatWeDo />
-      <Capabilities />
+      {/* ── 6-Act cinematic scroll experience (700vh) ── */}
+      <ArmShowcase />
+
+      {/* ── Below the showcase: standard sections ── */}
       <ProjectHighlights />
       <WhyRoboParadigm />
+      <Newsletters />
     </>
   );
 }

@@ -35,7 +35,7 @@ function CameraLogger() {
 }
 
 // ─── Responsive Arm Scaling ───────────────────────────────────────────────────
-function ResponsiveArm({ children, scrollYProgress }: { children: React.ReactNode; scrollYProgress: any }) {
+export function ResponsiveArm({ children, scrollYProgress }: { children: React.ReactNode; scrollYProgress: any }) {
   const { viewport } = useThree();
   const isMobile = viewport.width < 8;
   const isTablet = viewport.width >= 8 && viewport.width < 14;
@@ -50,7 +50,7 @@ function ResponsiveArm({ children, scrollYProgress }: { children: React.ReactNod
 }
 
 // ─── Floor Calibration Radar ──────────────────────────────────────────────────
-function FloorRadar({ progress }: { progress: any }) {
+export function FloorRadar({ progress }: { progress: any }) {
   const groupRef = useRef<THREE.Group>(null);
   const ringRef1 = useRef<THREE.LineSegments>(null);
   const ringRef2 = useRef<THREE.LineSegments>(null);
@@ -100,12 +100,12 @@ function FloorRadar({ progress }: { progress: any }) {
 }
 
 // ─── Camera Rig ───────────────────────────────────────────────────────────────
-interface ScrollCameraRigProps {
+export interface ScrollCameraRigProps {
   progress: any;
   controlsRef: React.RefObject<any>;
 }
 
-function ScrollCameraRig({ progress, controlsRef }: ScrollCameraRigProps) {
+export function ScrollCameraRig({ progress, controlsRef }: ScrollCameraRigProps) {
   const { camera } = useThree();
   const currentTargetRef = useRef(new THREE.Vector3(0, 0, 0));
 

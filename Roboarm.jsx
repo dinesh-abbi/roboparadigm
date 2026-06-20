@@ -8,108 +8,77 @@ import { useGLTF, Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
-function JointTooltip({ label, parentName, meshRefs }) {
-  const textRef = useRef(null);
-  const containerRef = useRef(null);
-  const [done, setDone] = useState(false);
-  const [visible, setVisible] = useState(true);
+// ─── Named Subsystem Groups for Act 3 ────────────────────────────────────────
+export const SUBSYSTEM_GROUPS = {
+  BASE: { meshes: ['Arm017', 'Arm018', 'Arm019', 'Arm020', 'Arm021', 'Arm022', 'Arm023', 'Arm024', 'Arm025', 'Arm026', 'Arm027', 'Arm028', 'Arm029', 'Arm030', 'Arm031', 'Arm032', 'Arm033', 'Arm034'], color: '#d4884c', label: 'BASE & TURRET', sublabel: 'DOF 1 · 360° rotation' },
+  LOWER_ARM: { meshes: ['Arm037', 'Arm038', 'Arm039', 'Arm041', 'Arm042', 'Arm043', 'Arm044', 'Arm045', 'Arm046', 'Arm047', 'Arm048', 'Arm049', 'Arm050', 'Group_Base'], color: '#60a5fa', label: 'LOWER ARM', sublabel: 'DOF 2–3 · Shoulder & Elbow' },
+  UPPER_ARM: { meshes: ['Arm053', 'Arm054', 'Arm055', 'Arm056', 'Arm057', 'Arm058', 'Arm059', 'Arm060', 'Arm061', 'Arm062', 'Arm063', 'Arm064', 'Arm065', 'Arm066', 'Arm067', 'Arm068', 'Arm069', 'Arm070', 'Group_Lower_Arm'], color: '#34d399', label: 'UPPER ARM', sublabel: 'DOF 4–5 · Wrist pitch & roll' },
+  FOREARM: { meshes: ['Arm073', 'Arm074', 'Arm075', 'Arm077', 'Arm078', 'Arm079', 'Arm080', 'Arm081', 'Arm082', 'Arm083', 'Arm084', 'Arm085', 'Arm086', 'Arm089', 'Arm090', 'Arm091', 'Arm092', 'Arm093', 'Arm094'], color: '#a78bfa', label: 'FOREARM MODULE', sublabel: 'DOF 6 · Wrist yaw' },
+  GRIPPER: { meshes: ['Arm095', 'Arm096', 'Arm097', 'Arm098', 'Arm099', 'Arm100', 'Arm101', 'Arm102', 'Arm103', 'Arm104', 'Arm106', 'Group_Lower_Arm-2', 'Arm109', 'Arm110', 'Arm111', 'Arm113', 'Arm114', 'Arm115', 'Arm116', 'Arm117', 'Arm118', 'Arm119', 'Arm120', 'Arm121', 'Arm122', 'Arm123', 'Arm124', 'Arm127', 'Arm128', 'Arm129', 'Group_Lower_Arm-1', 'Arm131', 'Arm132', 'Arm133', 'Arm134', 'Arm135', 'Arm136', 'Arm137', 'Arm138', 'Arm139', 'Arm140', 'Arm141', 'Arm142', 'Group_Gripper'], color: '#f87171', label: 'GRIPPER / END EFFECTOR', sublabel: 'DOF 7 · Parallel jaw' },
+};
 
-  useFrame(() => {
-    const parent = meshRefs.current[parentName];
-    if (!parent) return;
-
-    // partProgress goes from 1.0 (scattered) to 0.0 (assembled)
-    const p = parent.userData.partProgress ?? 1.0;
-    const isOk = p <= 0.01;
-
-    if (textRef.current) {
-      const angle = (34.2 + p * 55.8).toFixed(1);
-      textRef.current.innerText = `[${label}: ${isOk ? 'OK' : `θ = ${angle}° / CALIBRATING`}]`;
-    }
-
-    if (containerRef.current) {
-      if (isOk) {
-        containerRef.current.style.borderColor = 'rgba(34, 197, 94, 0.6)';
-        containerRef.current.style.color = '#22c55e';
-      } else {
-        containerRef.current.style.borderColor = 'rgba(212, 136, 76, 0.4)';
-        containerRef.current.style.color = '#d4884c';
-      }
-    }
-
-    if (isOk && !done) {
-      setDone(true);
-    }
-  });
-
-  useEffect(() => {
-    if (done) {
-      const timer = setTimeout(() => {
-        setVisible(false);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [done]);
-
-  if (!visible) return null;
-
-  return (
-    <Html position={[0, 0, 0]} center>
-      <div
-        ref={containerRef}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          whiteSpace: 'nowrap',
-          fontFamily: 'monospace',
-          fontSize: '9px',
-          letterSpacing: '0.1em',
-          backgroundColor: 'rgba(9, 9, 11, 0.85)',
-          border: '1px solid rgba(212, 136, 76, 0.4)',
-          color: '#d4884c',
-          padding: '4px 8px',
-          borderRadius: '4px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-          pointerEvents: 'none',
-          transition: 'all 0.3s ease',
-        }}
-      >
-        {!done && (
-          <div
-            style={{
-              width: '4.5px',
-              height: '4.5px',
-              borderRadius: '50%',
-              backgroundColor: '#d4884c',
-              animation: 'joint-pulse 1s infinite',
-            }}
-          />
-        )}
-        <span ref={textRef}>
-          [{label}: INITIALIZING...]
-        </span>
-        <style>{`
-          @keyframes joint-pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.3; }
-            100% { opacity: 1; }
-          }
-        `}</style>
-      </div>
-    </Html>
-  );
+// Lookup: mesh name → subsystem key
+const MESH_TO_SUBSYSTEM = {};
+for (const [key, group] of Object.entries(SUBSYSTEM_GROUPS)) {
+  for (const m of group.meshes) MESH_TO_SUBSYSTEM[m] = key;
 }
+
+// ─── Named Joints for Act 2 ───────────────────────────────────────────────────
+export const JOINT_DEFS = [
+  { name: 'Arm017', label: 'BASE ROTATION', dof: 'DOF 1', spec: '360° · Torque: 44 Nm', color: '#d4884c' },
+  { name: 'Arm053', label: 'SHOULDER', dof: 'DOF 2', spec: '±90° · Torque: 44 Nm', color: '#60a5fa' },
+  { name: 'Arm073', label: 'ELBOW', dof: 'DOF 3', spec: '±120° · Torque: 20 Nm', color: '#34d399' },
+  { name: 'Arm089', label: 'WRIST PITCH', dof: 'DOF 4', spec: '±90° · Torque: 8 Nm', color: '#a78bfa' },
+  { name: 'Arm094', label: 'WRIST ROLL', dof: 'DOF 5', spec: '±180° · Torque: 8 Nm', color: '#f59e0b' },
+  { name: 'Arm127', label: 'WRIST YAW', dof: 'DOF 6', spec: '±90° · Torque: 4 Nm', color: '#fb7185' },
+  { name: 'Group_Gripper', label: 'GRIPPER', dof: 'END EFFECTOR', spec: '0–100mm jaw · 5N grip', color: '#f87171' },
+];
 
 export function Model(props) {
   const { nodes, materials } = useGLTF('/roboparadigm-7dof.glb')
 
+  const groupRef = React.useRef(null)
+  const particlesRef = React.useRef(null)
   const meshRefs = React.useRef({})
   const restPose = React.useRef({})
   const assemblyOrder = React.useRef({})
   const zoneMap = React.useRef({})
   const smoothProgress = React.useRef(0)
-  const { viewport } = useThree()
+  const { viewport, camera, gl } = useThree()
+
+  // ─── New props ─────────────────────────────────────────────────────────────
+  // highlightedJoint: mesh name to pulse with emissive glow (Act 2)
+  // explodeMode: 'scatter' (original) | 'axis' (engineering diagram, Act 3)
+  // onJointPositions: callback({ meshName: {x,y} }) — screen-space positions each frame
+  const highlightedJoint = props.highlightedJoint || null;
+  const explodeMode = props.explodeMode || 'scatter';
+  const onJointPositions = props.onJointPositions || null;
+  const highlightProgress = React.useRef({});
+  const subsysProgress = React.useRef({
+    BASE: 0,
+    LOWER_ARM: 0,
+    UPPER_ARM: 0,
+    FOREARM: 0,
+    GRIPPER: 0,
+  });
+  const jointPositionsBuffer = React.useRef({});
+
+  // Mouse kinematics refs
+  const currentBaseY = React.useRef(0)
+  const currentShoulderZ = React.useRef(0)
+  const currentElbowX = React.useRef(0)
+  const currentGripperY = React.useRef(0)
+
+  // Particles database
+  const particlesCount = 45
+  const particlesData = React.useRef(
+    Array.from({ length: particlesCount }, () => ({
+      position: new THREE.Vector3(),
+      velocity: new THREE.Vector3(),
+      life: 0,
+      maxLife: 0
+    }))
+  )
 
   // Brand colors that match the logo and website theme
   const premiumMaterials = React.useMemo(() => ({
@@ -130,12 +99,25 @@ export function Model(props) {
       metalness: 0.8,
       roughness: 0.3,
       envMapIntensity: 1.2
+    }),
+    logoNavy: new THREE.MeshStandardMaterial({
+      color: '#0E2A5D',   // Logo navy (Arm009, Arm004, Arm012)
+      metalness: 0.5,
+      roughness: 0.45,
+      envMapIntensity: 1.0
+    }),
+    logoCopper: new THREE.MeshStandardMaterial({
+      color: '#D58C47',   // Logo copper (Arm006, Arm008, Arm007, Arm010)
+      metalness: 0.7,
+      roughness: 0.3,
+      envMapIntensity: 1.5
     })
   }), [])
 
   const setRef = (el, name, order, zone) => {
     if (el && !meshRefs.current[name]) {
       meshRefs.current[name] = el
+      el.name = name;
       restPose.current[name] = {
         px: el.position.x,
         py: el.position.y,
@@ -189,241 +171,726 @@ export function Model(props) {
     return h;
   }
 
-  useFrame(() => {
-    const target = props.scrollYProgress ? props.scrollYProgress.get() : 0;
-    smoothProgress.current += (target - smoothProgress.current) * 0.06;
-
-    const globalProgress = 1 - smoothstep(smoothProgress.current);
+  useFrame((state, delta) => {
+    const activeSection = props.section !== undefined ? props.section : null;
 
     const groupScale = props.groupScale || 0.018;
     const scatterX = (viewport.width / groupScale) * 0.45;
     const scatterY = (viewport.height / groupScale) * 0.38;
 
     const entries = Object.entries(meshRefs.current);
-
-    entries.forEach(([name, ref]) => {
-      const rest = restPose.current[name];
-      const order = assemblyOrder.current[name] || 0.5;
-      const zone = zoneMap.current[name] || 0;
-      if (!ref || !rest) return;
-
-      // Sequential assembly
-      const assemblyStart = 0.12 + order * 0.72;
-      const assemblyWindow = 0.18;
-      let partProgress = clamp((globalProgress - assemblyStart) / assemblyWindow, 0, 1);
-      partProgress = smoothstep(partProgress);
-
-      // Per-part jitter from hash
-      const h = hashStr(name);
-      const jX = ((h % 1000) / 1000 - 0.5) * 2;
-      const jY = (((h >> 10) % 1000) / 1000 - 0.5) * 2;
-      const jZ = (((h >> 20) % 1000) / 1000 - 0.5) * 2;
-
-      let dx = 0, dy = 0, dz = 0;
-
-      // Zone-based scatter - GUARANTEED left/right balance via round-robin
-      if (zone === 0) {
-        // Deep Left
-        dx = -scatterX * (0.6 + Math.abs(jX) * 0.4);
-        dy = scatterY * jY * 0.4;
-        dz = -250 + jZ * 150;
-      } else if (zone === 1) {
-        // Deep Right
-        dx = scatterX * (0.6 + Math.abs(jX) * 0.4);
-        dy = scatterY * jY * 0.4;
-        dz = -250 + jZ * 150;
-      } else if (zone === 2) {
-        // Top-Left
-        dx = -scatterX * jX * 0.4;
-        dy = scatterY * (0.5 + Math.abs(jY) * 0.5);
-        dz = -180 + jZ * 120;
-      } else if (zone === 3) {
-        // Top-Right
-        dx = scatterX * Math.abs(jX) * 0.4;
-        dy = scatterY * (0.5 + Math.abs(jY) * 0.5);
-        dz = -180 + jZ * 120;
-      } else if (zone === 4) {
-        // Bottom-Left
-        dx = -scatterX * Math.abs(jX) * 0.4;
-        dy = -scatterY * (0.5 + Math.abs(jY) * 0.5);
-        dz = -180 + jZ * 120;
-      } else {
-        // Bottom-Right
-        dx = scatterX * Math.abs(jX) * 0.4;
-        dy = -scatterY * (0.5 + Math.abs(jY) * 0.5);
-        dz = -180 + jZ * 120;
+    if (props.debugFullModel) {
+      if (groupRef.current) {
+        groupRef.current.rotation.y = 0;
       }
+      entries.forEach(([name, ref]) => {
+        const rest = restPose.current[name];
+        if (ref && rest) {
+          ref.position.set(rest.px, rest.py, rest.pz);
+          ref.rotation.set(rest.rx, rest.ry, rest.rz);
 
-      ref.position.set(
-        rest.px + dx * partProgress,
-        rest.py + dy * partProgress,
-        rest.pz + dz * partProgress
+          if (props.clickedMesh && name === props.clickedMesh) {
+            if (ref.material) {
+              ref.material.transparent = true;
+              ref.material.opacity = 1.0;
+              if (ref.material.emissive !== undefined) {
+                ref.material.emissive.set("#00f0ff");
+                ref.material.emissiveIntensity = 3.0;
+              }
+            }
+            if (ref.userData.wireframeClone) {
+              ref.userData.wireframeClone.visible = true;
+              ref.userData.wireframeClone.material.color.set("#00f0ff");
+              ref.userData.wireframeClone.material.opacity = 0.9;
+            }
+          } else {
+            if (ref.material) {
+              ref.material.transparent = false;
+              ref.material.opacity = 1.0;
+              if (ref.material.emissive !== undefined) {
+                ref.material.emissive.set("#000000");
+                ref.material.emissiveIntensity = 0.0;
+              }
+            }
+            if (ref.userData.wireframeClone) {
+              ref.userData.wireframeClone.visible = false;
+            }
+          }
+        }
+      });
+      return;
+    }
+    const canvas = gl.domElement;
+    const canvasW = canvas.clientWidth || canvas.width;
+    const canvasH = canvas.clientHeight || canvas.height;
+    const worldPos = new THREE.Vector3();
+    const projected = {};
+
+    const propGlobalProgress = props.globalProgress !== undefined && props.globalProgress !== null ? props.globalProgress : null;
+    const scrollProgress = props.scrollProgress !== undefined && props.scrollProgress !== null ? props.scrollProgress : 0;
+    const logoEvolve = Math.max(0, Math.min(1, scrollProgress / 0.18));
+    const logoEvolveSmooth = logoEvolve * logoEvolve * (3 - 2 * logoEvolve);
+
+    if (propGlobalProgress !== null) {
+      // ─── SEQUENTIAL SUBSYSTEM DISMANTLING ON SCROLL ────────────────────────
+      const subsysKeys = ['BASE', 'LOWER_ARM', 'UPPER_ARM', 'FOREARM', 'GRIPPER'];
+      const continuousIndex = propGlobalProgress * 7;
+
+      subsysKeys.forEach((key, index) => {
+        const targetSec = index + 1;
+
+        let target = 0;
+        if (continuousIndex >= targetSec - 1 && continuousIndex <= targetSec) {
+          // progress goes 0 -> 1 as we scroll into the joint's detail section
+          target = continuousIndex - (targetSec - 1);
+        } else if (continuousIndex > targetSec && continuousIndex <= targetSec + 1) {
+          // progress goes 1 -> 0 as we scroll out of the joint's detail section
+          target = 1 - (continuousIndex - targetSec);
+        }
+
+        // transition into section 6 (exploded diagram, index goes 5 -> 6)
+        if (continuousIndex > 5 && continuousIndex <= 6) {
+          const t = continuousIndex - 5;
+          target = target + (1 - target) * t;
+        }
+        // Section 6 (exploded view) is active: all parts exploded at 1
+        if (continuousIndex > 6 && continuousIndex <= 7) {
+          const t = continuousIndex - 6;
+          target = 1 - t;
+        }
+
+        // Smoothly lerp towards this target to filter out scroll jitter and give it momentum
+        subsysProgress.current[key] += (target - subsysProgress.current[key]) * 0.1;
+      });
+
+      // Calculate continuous visual weights to blend opacities smoothly without pops
+      const focusWeights = {};
+      subsysKeys.forEach((key, index) => {
+        const targetSec = index + 1;
+        focusWeights[key] = Math.max(0, 1 - Math.abs(continuousIndex - targetSec));
+      });
+
+      const explodedWeight = Math.max(0, 1 - Math.abs(continuousIndex - 6));
+      const overviewWeight = Math.max(0, 1 - continuousIndex); // near Section 0
+      const ctaWeight = Math.max(0, 1 - (7 - continuousIndex));  // near Section 7
+      const assembledWeight = Math.max(overviewWeight, ctaWeight);
+
+      // --- Shared Logo Emblem Rigid Body Transformation ---
+      const logoCenterRest = new THREE.Vector3(0.5, 258.0, 36.0);
+      const logoCenterLaunch = new THREE.Vector3(0, 120, 100);
+
+      const logoRotRest = new THREE.Euler(0, 0, 0);
+      // Use live tuner values from inspector panel if active, otherwise use saved launch rotation
+      const _ldr = props.logoDebugRot;
+      const logoRotLaunch = _ldr
+        ? new THREE.Euler(_ldr.x, _ldr.y, _ldr.z)
+        : new THREE.Euler(0.5684, 0.0000, 0.0000);
+
+      const logoScaleRest = 1.0;
+      const logoScaleLaunch = 2.2;
+
+      const currentLogoCenter = new THREE.Vector3(
+        THREE.MathUtils.lerp(logoCenterLaunch.x, logoCenterRest.x, logoEvolveSmooth),
+        THREE.MathUtils.lerp(logoCenterLaunch.y, logoCenterRest.y, logoEvolveSmooth),
+        THREE.MathUtils.lerp(logoCenterLaunch.z, logoCenterRest.z, logoEvolveSmooth)
       );
 
-      ref.rotation.set(
-        rest.rx + jX * Math.PI * 0.3 * partProgress,
-        rest.ry + jY * Math.PI * 0.3 * partProgress,
-        rest.rz + jZ * Math.PI * 0.2 * partProgress
+      const currentLogoRot = new THREE.Euler(
+        THREE.MathUtils.lerp(logoRotLaunch.x, logoRotRest.x, logoEvolveSmooth),
+        THREE.MathUtils.lerp(logoRotLaunch.y, logoRotRest.y, logoEvolveSmooth),
+        THREE.MathUtils.lerp(logoRotLaunch.z, logoRotRest.z, logoEvolveSmooth)
       );
 
-      // Save progress to userData so tooltip components can read it dynamically
-      ref.userData.partProgress = partProgress;
+      const currentLogoScale = THREE.MathUtils.lerp(logoScaleLaunch, logoScaleRest, logoEvolveSmooth);
 
-      // Wireframe-to-solid transition:
-      // If partProgress > 0.1 (scattered), render only the amber wireframe.
-      // As partProgress goes 0.1 -> 0.0, fade out wireframe and fade in solid mesh.
-      if (partProgress > 0.1) {
-        if (ref.material) ref.material.opacity = 0;
-        if (ref.userData.wireframeClone) {
-          ref.userData.wireframeClone.material.opacity = 0.5;
-          ref.userData.wireframeClone.visible = true;
+      entries.forEach(([name, ref]) => {
+        const rest = restPose.current[name];
+        if (!ref || !rest) return;
+
+        const subsysKey = MESH_TO_SUBSYSTEM[name];
+        const sp = subsysKey ? subsysProgress.current[subsysKey] : 0;
+
+        const logoPartsList = [
+          "Arm013", "Arm004", "Arm008", "Arm014", "Arm009",
+          "Arm010", "Arm005", "Arm011", "Arm012", "Arm006", "Arm007"
+        ];
+        const isLogoPart = logoPartsList.includes(name);
+
+        // Calculate scatter positions if in axis explode mode
+        let dx = 0, dy = 0, dz = 0;
+        if (subsysKey) {
+          const AXIS_OFFSETS = {
+            BASE: { dx: 0, dy: -220, dz: 0 },
+            LOWER_ARM: { dx: -90, dy: -60, dz: 80 },
+            UPPER_ARM: { dx: 110, dy: 30, dz: -60 },
+            FOREARM: { dx: -80, dy: 130, dz: -70 },
+            GRIPPER: { dx: 0, dy: 260, dz: 40 },
+          };
+          const off = AXIS_OFFSETS[subsysKey] || { dx: 0, dy: 0, dz: 0 };
+          dx = off.dx * 0.45;
+          dy = off.dy * 0.45;
+          dz = off.dz * 0.45;
         }
-      } else {
-        const t = clamp((0.1 - partProgress) / 0.1, 0, 1);
-        if (ref.material) ref.material.opacity = t;
-        if (ref.userData.wireframeClone) {
-          ref.userData.wireframeClone.material.opacity = 0.5 * (1 - t);
-          ref.userData.wireframeClone.visible = t < 1.0;
+
+        if (isLogoPart) {
+          // Rigid Body offset from emblem rest center
+          const v = new THREE.Vector3(rest.px, rest.py, rest.pz).sub(logoCenterRest);
+
+          // Apply scale
+          v.multiplyScalar(currentLogoScale);
+
+          // Apply rotation
+          v.applyEuler(currentLogoRot);
+
+          // Apply translation to current orbital center
+          v.add(currentLogoCenter);
+
+          ref.position.copy(v);
+          ref.rotation.copy(currentLogoRot);
+          ref.scale.set(currentLogoScale, currentLogoScale, currentLogoScale);
+        } else {
+          ref.scale.set(1.0, 1.0, 1.0);
+
+          // Extra evolution scatter for other parts
+          const scatterFactor = 1 - logoEvolveSmooth;
+          const h = hashStr(name);
+          const sX = ((h % 1000) / 1000 - 0.5) * 450 * scatterFactor;
+          const sY = (((h >> 10) % 1000) / 1000 - 0.5) * 450 * scatterFactor;
+          const sZ = (((h >> 20) % 1000) / 1000 - 0.5) * 450 * scatterFactor - 200 * scatterFactor;
+
+          if (subsysKey) {
+            ref.position.set(
+              rest.px + dx * sp + sX,
+              rest.py + dy * sp + sY,
+              rest.pz + dz * sp + sZ
+            );
+            ref.rotation.set(
+              rest.rx + ((h % 5) - 2) * 0.5 * scatterFactor,
+              rest.ry + (((h >> 4) % 5) - 2) * 0.5 * scatterFactor,
+              rest.rz + (((h >> 8) % 5) - 2) * 0.5 * scatterFactor
+            );
+          } else {
+            ref.position.set(rest.px + sX, rest.py + sY, rest.pz + sZ);
+            ref.rotation.set(
+              rest.rx + ((h % 5) - 2) * 0.5 * scatterFactor,
+              rest.ry + (((h >> 4) % 5) - 2) * 0.5 * scatterFactor,
+              rest.rz + (((h >> 8) % 5) - 2) * 0.5 * scatterFactor
+            );
+          }
+        }
+
+        const subsysColor = SUBSYSTEM_GROUPS[subsysKey]?.color || '#d4884c';
+
+        if (isLogoPart) {
+          // Logo parts: fully opaque, preserve their own logoCopper/logoNavy color, no subsystem emissive override
+          if (ref.material) {
+            ref.material.transparent = false;
+            ref.material.opacity = 1.0;
+            if (ref.material.emissive !== undefined) {
+              // Subtle glow matching the part's own color at launch only
+              const logoGlow = (1 - logoEvolveSmooth) * 0.3;
+              ref.material.emissive.copy(ref.material.color).multiplyScalar(logoGlow);
+              ref.material.emissiveIntensity = 1.0;
+            }
+          }
+          if (ref.userData.wireframeClone) {
+            ref.userData.wireframeClone.visible = false;
+          }
+        } else {
+          // Normal meshes fade in as logoEvolveSmooth goes 0 -> 1
+          if (subsysKey) {
+            const wF = focusWeights[subsysKey] || 0;
+
+            // Smoothly blend solid opacity based on active/dormant/exploded weights
+            let solidOpacity = assembledWeight * 1.0
+              + wF * (1 - sp * 0.6)
+              + explodedWeight * 0.05
+              + (1 - assembledWeight - wF - explodedWeight) * 0.15;
+
+            solidOpacity *= logoEvolveSmooth;
+
+            // Smoothly blend wireframe opacity
+            const wireOpacity = (explodedWeight * 0.45 + wF * (sp * 0.55)) * logoEvolveSmooth;
+            const wireVisible = wireOpacity > 0.01;
+
+            // Smoothly blend emissive pulse glow
+            const pulse = 0.5 + 0.5 * Math.sin(state.clock.elapsedTime * 4);
+            const emissiveInt = wF * pulse * 1.0 * logoEvolveSmooth;
+
+            if (ref.material) {
+              ref.material.transparent = true;
+              ref.material.opacity = solidOpacity;
+              if (ref.material.emissive !== undefined) {
+                ref.material.emissive.set(subsysColor);
+                ref.material.emissiveIntensity = emissiveInt;
+              }
+            }
+            if (ref.userData.wireframeClone) {
+              const wc = ref.userData.wireframeClone;
+              wc.material.color.set(subsysColor);
+              wc.material.opacity = wireOpacity;
+              wc.visible = wireVisible;
+            }
+          } else {
+            // Structural elements (no subsystem): fade to silhouette when focusing/exploding
+            let solidOpacity = assembledWeight * 1.0
+              + explodedWeight * 0.05
+              + (1 - assembledWeight - explodedWeight) * 0.15;
+
+            solidOpacity *= logoEvolveSmooth;
+
+            if (ref.material) {
+              ref.material.transparent = true;
+              ref.material.opacity = solidOpacity;
+            }
+            if (ref.userData.wireframeClone) {
+              ref.userData.wireframeClone.visible = false;
+            }
+          }
+        }
+
+        // If this mesh is currently inspected/clicked by the user, make it glow neon cyan to highlight it
+        if (props.clickedMesh && name === props.clickedMesh) {
+          if (ref.material) {
+            ref.material.transparent = true;
+            ref.material.opacity = 1.0;
+            if (ref.material.emissive !== undefined) {
+              ref.material.emissive.set("#00f0ff");
+              ref.material.emissiveIntensity = 3.0;
+            }
+          }
+          if (ref.userData.wireframeClone) {
+            ref.userData.wireframeClone.visible = true;
+            ref.userData.wireframeClone.material.color.set("#00f0ff");
+            ref.userData.wireframeClone.material.opacity = 0.9;
+          }
+        }
+
+        // Project world position to screen for DOM annotations
+        ref.getWorldPosition(worldPos);
+        worldPos.project(camera);
+        projected[name] = {
+          x: (worldPos.x * 0.5 + 0.5) * canvasW,
+          y: (-worldPos.y * 0.5 + 0.5) * canvasH,
+        };
+      });
+
+
+    } else {
+      // ─── ORIGINAL PATH (BACKWARDS COMPATIBILITY) ───────────────────────────
+      const target = props.scrollYProgress ? props.scrollYProgress.get() : 0;
+      smoothProgress.current += (target - smoothProgress.current) * 0.06;
+
+      const globalProgress = 1 - smoothstep(smoothProgress.current);
+      const isFullyAssembled = Math.abs(smoothProgress.current - 1) < 0.01;
+
+      entries.forEach(([name, ref]) => {
+        const rest = restPose.current[name];
+        if (!ref || !rest) return;
+
+        if (isFullyAssembled) {
+          ref.position.set(rest.px, rest.py, rest.pz);
+          ref.rotation.set(rest.rx, rest.ry, rest.rz);
+          if (ref.material) {
+            ref.material.opacity = 1;
+            ref.material.transparent = false;
+          }
+          if (ref.userData.wireframeClone) ref.userData.wireframeClone.visible = false;
+
+          const isHighlighted = highlightedJoint === name;
+          if (!highlightProgress.current[name]) highlightProgress.current[name] = 0;
+          highlightProgress.current[name] += ((isHighlighted ? 1 : 0) - highlightProgress.current[name]) * 0.08;
+          const hp = highlightProgress.current[name];
+
+          if (ref.material && ref.material.emissive !== undefined) {
+            const hlColor = isHighlighted ? (props.highlightColor || '#d4884c') : '#d4884c';
+            const pulse = hp * (0.4 + 0.6 * Math.sin(state.clock.elapsedTime * 3.5));
+            ref.material.emissive.set(hlColor);
+            ref.material.emissiveIntensity = pulse * 1.2;
+          }
+        } else {
+          const order = assemblyOrder.current[name] || 0.5;
+          const zone = zoneMap.current[name] || 0;
+
+          const assemblyStart = 0.12 + order * 0.72;
+          const assemblyWindow = 0.18;
+          let partProgress = clamp((globalProgress - assemblyStart) / assemblyWindow, 0, 1);
+          partProgress = smoothstep(partProgress);
+
+          const h = hashStr(name);
+          const jX = ((h % 1000) / 1000 - 0.5) * 2;
+          const jY = (((h >> 10) % 1000) / 1000 - 0.5) * 2;
+          const jZ = (((h >> 20) % 1000) / 1000 - 0.5) * 2;
+
+          let dx = 0, dy = 0, dz = 0;
+          if (explodeMode === 'axis') {
+            const subsysKey = MESH_TO_SUBSYSTEM[name];
+            const AXIS_OFFSETS = {
+              BASE: { dx: 0, dy: -220, dz: 0 },
+              LOWER_ARM: { dx: -90, dy: -60, dz: 80 },
+              UPPER_ARM: { dx: 110, dy: 30, dz: -60 },
+              FOREARM: { dx: -80, dy: 130, dz: -70 },
+              GRIPPER: { dx: 0, dy: 260, dz: 40 },
+            };
+            const off = AXIS_OFFSETS[subsysKey] || { dx: 0, dy: 0, dz: 0 };
+            dx = off.dx * (scatterX / 400);
+            dy = off.dy * (scatterY / 300);
+            dz = off.dz;
+          } else {
+            if (zone === 0) { dx = -scatterX * (0.6 + Math.abs(jX) * 0.4); dy = scatterY * jY * 0.4; dz = -250 + jZ * 150; }
+            else if (zone === 1) { dx = scatterX * (0.6 + Math.abs(jX) * 0.4); dy = scatterY * jY * 0.4; dz = -250 + jZ * 150; }
+            else if (zone === 2) { dx = -scatterX * jX * 0.4; dy = scatterY * (0.5 + Math.abs(jY) * 0.5); dz = -180 + jZ * 120; }
+            else if (zone === 3) { dx = scatterX * Math.abs(jX) * 0.4; dy = scatterY * (0.5 + Math.abs(jY) * 0.5); dz = -180 + jZ * 120; }
+            else if (zone === 4) { dx = -scatterX * Math.abs(jX) * 0.4; dy = -scatterY * (0.5 + Math.abs(jY) * 0.5); dz = -180 + jZ * 120; }
+            else { dx = scatterX * Math.abs(jX) * 0.4; dy = -scatterY * (0.5 + Math.abs(jY) * 0.5); dz = -180 + jZ * 120; }
+          }
+
+          ref.position.set(rest.px + dx * partProgress, rest.py + dy * partProgress, rest.pz + dz * partProgress);
+
+          if (explodeMode === 'axis') {
+            ref.rotation.set(rest.rx, rest.ry, rest.rz);
+          } else {
+            ref.rotation.set(
+              rest.rx + jX * Math.PI * 0.3 * partProgress,
+              rest.ry + jY * Math.PI * 0.3 * partProgress,
+              rest.rz + jZ * Math.PI * 0.2 * partProgress
+            );
+          }
+
+          ref.userData.partProgress = partProgress;
+
+          const isHighlighted = highlightedJoint === name;
+          if (!highlightProgress.current[name]) highlightProgress.current[name] = 0;
+          highlightProgress.current[name] += ((isHighlighted ? 1 : 0) - highlightProgress.current[name]) * 0.06;
+          const hp = highlightProgress.current[name];
+          const subsysKey = MESH_TO_SUBSYSTEM[name];
+          const subsysColor = SUBSYSTEM_GROUPS[subsysKey]?.color || '#d4884c';
+
+          if (partProgress > 0.1) {
+            if (ref.material) ref.material.opacity = 0;
+            if (ref.userData.wireframeClone) {
+              const wc = ref.userData.wireframeClone;
+              wc.material.color.set(explodeMode === 'axis' ? subsysColor : '#d4884c');
+              wc.material.opacity = 0.5;
+              wc.visible = true;
+            }
+          } else {
+            const t = clamp((0.1 - partProgress) / 0.1, 0, 1);
+            if (ref.material) {
+              ref.material.opacity = t;
+              if (ref.material.emissive !== undefined) {
+                const pulse = hp * (0.5 + 0.5 * Math.sin(state.clock.elapsedTime * 4));
+                ref.material.emissive.set(subsysColor);
+                ref.material.emissiveIntensity = pulse * 0.8;
+              }
+            }
+            if (ref.userData.wireframeClone) {
+              ref.userData.wireframeClone.material.opacity = 0.5 * (1 - t);
+              ref.userData.wireframeClone.visible = t < 1.0;
+            }
+          }
+        }
+
+        // If this mesh is currently inspected/clicked by the user, make it glow neon cyan to highlight it
+        if (props.clickedMesh && name === props.clickedMesh) {
+          if (ref.material) {
+            ref.material.transparent = true;
+            ref.material.opacity = 1.0;
+            if (ref.material.emissive !== undefined) {
+              ref.material.emissive.set("#00f0ff");
+              ref.material.emissiveIntensity = 3.0;
+            }
+          }
+          if (ref.userData.wireframeClone) {
+            ref.userData.wireframeClone.visible = true;
+            ref.userData.wireframeClone.material.color.set("#00f0ff");
+            ref.userData.wireframeClone.material.opacity = 0.9;
+          }
+        }
+
+        ref.getWorldPosition(worldPos);
+        worldPos.project(camera);
+        projected[name] = {
+          x: (worldPos.x * 0.5 + 0.5) * canvasW,
+          y: (-worldPos.y * 0.5 + 0.5) * canvasH,
+        };
+      });
+    }
+
+    // Fire callback so ArmAnnotations can position its DOM elements
+    if (onJointPositions) {
+      onJointPositions(projected);
+    }
+
+    // ─── Mouse-Targeting Kinematics & Particles ────────────────────────────
+    const sweepIntensity = activeSection === null
+      ? clamp((smoothProgress.current - 0.98) / 0.02, 0, 1)
+      : (activeSection === 7 ? 1 : 0);
+    const time = state.clock.elapsedTime;
+
+    if (sweepIntensity > 0) {
+      // Set target angles based on cursor pointer coordinates (-1 to 1)
+      const targetBaseY = state.pointer.x * 0.65;
+      const targetShoulderZ = state.pointer.y * 0.35;
+      const targetElbowX = state.pointer.y * -0.45;
+      const targetGripperY = Math.sin(time * 2.0) * 0.15; // Ambient claw wiggle
+
+      // Smooth interpolation (lerp)
+      currentBaseY.current += (targetBaseY - currentBaseY.current) * 0.08;
+      currentShoulderZ.current += (targetShoulderZ - currentShoulderZ.current) * 0.08;
+      currentElbowX.current += (targetElbowX - currentElbowX.current) * 0.08;
+      currentGripperY.current += (targetGripperY - currentGripperY.current) * 0.08;
+
+      // Apply base rotation around Y axis to parent group
+      if (groupRef.current) {
+        groupRef.current.rotation.y = currentBaseY.current * sweepIntensity;
+      }
+
+      // Apply shoulder (Arm017) Z-axis flex
+      const shoulderMesh = meshRefs.current["Arm017"];
+      if (shoulderMesh && restPose.current["Arm017"]) {
+        shoulderMesh.rotation.z = restPose.current["Arm017"].rz + currentShoulderZ.current * sweepIntensity;
+      }
+
+      // Apply elbow (Arm004) X-axis flex
+      const elbowMesh = meshRefs.current["Arm004"];
+      if (elbowMesh && restPose.current["Arm004"]) {
+        elbowMesh.rotation.x = restPose.current["Arm004"].rx + currentElbowX.current * sweepIntensity;
+      }
+
+      // Apply gripper (Arm006) Y-axis claw wiggle
+      const gripperMesh = meshRefs.current["Arm006"];
+      if (gripperMesh && restPose.current["Arm006"]) {
+        gripperMesh.rotation.y = restPose.current["Arm006"].ry + currentGripperY.current * sweepIntensity;
+
+        // Spawn active particles at the tip of the gripper claw in world coordinates
+        const gripperWorldPos = new THREE.Vector3();
+        gripperMesh.getWorldPosition(gripperWorldPos);
+
+        // Spawn 1 particle per frame if available
+        const inactive = particlesData.current.find(p => p.life <= 0);
+        if (inactive) {
+          inactive.position.copy(gripperWorldPos);
+          // Scatter slightly around tip
+          inactive.position.x += (Math.random() - 0.5) * 5;
+          inactive.position.y += (Math.random() - 0.5) * 5;
+          inactive.position.z += (Math.random() - 0.5) * 5;
+
+          // Upward drift velocity with slight horizontal float
+          inactive.velocity.set(
+            (Math.random() - 0.5) * 8,
+            20 + Math.random() * 25,
+            (Math.random() - 0.5) * 8
+          );
+          inactive.maxLife = 1.0 + Math.random() * 1.5;
+          inactive.life = inactive.maxLife;
         }
       }
-    });
+    } else {
+      // Reset tracking when scroll back
+      if (groupRef.current) {
+        groupRef.current.rotation.y = 0;
+      }
+      currentBaseY.current = 0;
+      currentShoulderZ.current = 0;
+      currentElbowX.current = 0;
+      currentGripperY.current = 0;
+    }
+
+    // ─── Particle Physics and Buffer Geometry Updates ───────────────────────
+    if (particlesRef.current) {
+      const posAttr = particlesRef.current.geometry.attributes.position;
+      const colorAttr = particlesRef.current.geometry.attributes.color;
+
+      for (let i = 0; i < particlesCount; i++) {
+        const p = particlesData.current[i];
+        if (p.life > 0 && sweepIntensity > 0.05) {
+          // Physics step: move position by velocity
+          p.position.addScaledVector(p.velocity, delta);
+
+          // Add slow drifting brownian motion
+          p.velocity.x += Math.sin(time * 4 + i) * 0.2;
+          p.velocity.z += Math.cos(time * 4 + i) * 0.2;
+          p.life -= delta;
+
+          posAttr.setXYZ(i, p.position.x, p.position.y, p.position.z);
+
+          // Ember color: fade from bright amber/copper to dark red
+          const ratio = p.life / p.maxLife;
+          const r = 0.83 * ratio; // #d4884c red
+          const g = 0.53 * ratio * 0.7; // green
+          const b = 0.30 * ratio * 0.4; // blue
+          colorAttr.setXYZ(i, r, g, b);
+        } else {
+          p.life = 0;
+          posAttr.setXYZ(i, 99999, 99999, 99999); // hide particle
+          colorAttr.setXYZ(i, 0, 0, 0);
+        }
+      }
+
+      posAttr.needsUpdate = true;
+      colorAttr.needsUpdate = true;
+    }
   });
 
   return (
     <group {...props} dispose={null}>
-      <mesh ref={(el) => setRef(el, "Arm004", 0.6855, 1)} geometry={nodes.Arm004.geometry} material={premiumMaterials.darkCopper} position={[-1.735, 255.327, 38.378]}>
-        <JointTooltip label="J_ELBOW" parentName="Arm004" meshRefs={meshRefs} />
-      </mesh>
-      <mesh ref={(el) => setRef(el, "Arm005", 0.6290, 4)} geometry={nodes.Arm005.geometry} material={premiumMaterials.gunmetal} position={[-4.83, 252.492, 40.419]} />
-      <mesh ref={(el) => setRef(el, "Arm006", 0.8952, 1)} geometry={nodes.Arm006.geometry} material={premiumMaterials.gunmetal} position={[10.236, 265.04, 31.385]}>
-        <JointTooltip label="J_GRIPPER" parentName="Arm006" meshRefs={meshRefs} />
-      </mesh>
-      <mesh ref={(el) => setRef(el, "Arm007", 0.8710, 4)} geometry={nodes.Arm007.geometry} material={premiumMaterials.gunmetal} position={[-0.601, 263.227, 32.691]} />
-      <mesh ref={(el) => setRef(el, "Arm008", 0.7742, 2)} geometry={nodes.Arm008.geometry} material={premiumMaterials.gunmetal} position={[5.178, 260.757, 34.471]} />
-      <mesh ref={(el) => setRef(el, "Arm009", 0.5968, 0)} geometry={nodes.Arm009.geometry} material={premiumMaterials.warmGray} position={[4.567, 250.057, 42.173]} />
-      <mesh ref={(el) => setRef(el, "Arm010", 0.8226, 0)} geometry={nodes.Arm010.geometry} material={premiumMaterials.gunmetal} position={[6.641, 262.254, 33.402]} />
-      <mesh ref={(el) => setRef(el, "Arm011", 0.7097, 4)} geometry={nodes.Arm011.geometry} material={premiumMaterials.darkCopper} position={[8.304, 255.988, 37.86]} />
-      <mesh ref={(el) => setRef(el, "Arm012", 0.6774, 0)} geometry={nodes.Arm012.geometry} material={premiumMaterials.gunmetal} position={[-9.559, 253.831, 39.455]} />
-      <mesh ref={(el) => setRef(el, "Arm013", 0.8871, 0)} geometry={nodes.Arm013.geometry} material={premiumMaterials.warmGray} position={[-1.935, 264.535, 31.748]} />
-      <mesh ref={(el) => setRef(el, "Arm014", 0.7581, 0)} geometry={nodes.Arm014.geometry} material={premiumMaterials.darkCopper} position={[12.596, 260.456, 34.686]} />
-      <mesh ref={(el) => setRef(el, "Arm017", 0.0806, 0)} geometry={nodes.Arm017.geometry} material={premiumMaterials.darkCopper} position={[2.022, -20.552, -3.263]}>
-        <JointTooltip label="J_SHOULDER" parentName="Arm017" meshRefs={meshRefs} />
-      </mesh>
-      <mesh ref={(el) => setRef(el, "Arm018", 0.1210, 1)} geometry={nodes.Arm018.geometry} material={premiumMaterials.gunmetal} position={[0.002, -1.178, -3.543]} />
-      <mesh ref={(el) => setRef(el, "Arm019", 0.1290, 2)} geometry={nodes.Arm019.geometry} material={premiumMaterials.darkCopper} position={[3.482, -1.1, -6.737]} />
-      <mesh ref={(el) => setRef(el, "Arm020", 0.1129, 0)} geometry={nodes.Arm020.geometry} material={premiumMaterials.warmGray} position={[-3.593, -1.35, -2.143]} />
-      <mesh ref={(el) => setRef(el, "Arm021", 0.1048, 1)} geometry={nodes.Arm021.geometry} material={premiumMaterials.darkCopper} position={[-0.029, -1.565, -6.968]} />
-      <mesh ref={(el) => setRef(el, "Arm022", 0.0081, 1)} geometry={nodes.Arm022.geometry} material={premiumMaterials.darkCopper} position={[-0.033, -32.015, -2.684]}>
-        <JointTooltip label="J_BASE" parentName="Arm022" meshRefs={meshRefs} />
-      </mesh>
-      <mesh ref={(el) => setRef(el, "Arm023", 0.0323, 0)} geometry={nodes.Arm023.geometry} material={premiumMaterials.darkCopper} position={[-9.35, -29.6, 19.35]} />
-      <mesh ref={(el) => setRef(el, "Arm024", 0.0403, 1)} geometry={nodes.Arm024.geometry} material={premiumMaterials.warmGray} position={[9.35, -29.6, 19.35]} />
-      <mesh ref={(el) => setRef(el, "Arm025", 0.0161, 0)} geometry={nodes.Arm025.geometry} material={premiumMaterials.warmGray} position={[9.208, -30.135, 2.354]} />
-      <mesh ref={(el) => setRef(el, "Arm026", 0.0565, 3)} geometry={nodes.Arm026.geometry} material={premiumMaterials.darkCopper} position={[10.695, -29.416, 5.683]} />
-      <mesh ref={(el) => setRef(el, "Arm027", 0.0242, 1)} geometry={nodes.Arm027.geometry} material={premiumMaterials.gunmetal} position={[-9.208, -30.135, 2.354]} />
-      <mesh ref={(el) => setRef(el, "Arm028", 0.0645, 4)} geometry={nodes.Arm028.geometry} material={premiumMaterials.warmGray} position={[-10.695, -29.416, 5.683]} />
-      <mesh ref={(el) => setRef(el, "Arm029", 0.0484, 2)} geometry={nodes.Arm029.geometry} material={premiumMaterials.gunmetal} position={[0, -29.45, 12.25]} />
-      <mesh ref={(el) => setRef(el, "Arm030", 0.0887, 1)} geometry={nodes.Arm030.geometry} material={premiumMaterials.warmGray} position={[-1.276, -11.852, -13.263]} />
-      <mesh ref={(el) => setRef(el, "Arm031", 0.0726, 5)} geometry={nodes.Arm031.geometry} material={premiumMaterials.gunmetal} position={[0.072, -20.77, 7.394]} />
-      <mesh ref={(el) => setRef(el, "Arm032", 0.0968, 0)} geometry={nodes.Arm032.geometry} material={premiumMaterials.gunmetal} position={[-0.006, -4.607, 12.248]} />
-      <mesh ref={(el) => setRef(el, "Arm033", 0.1371, 3)} geometry={nodes.Arm033.geometry} material={premiumMaterials.warmGray} position={[0.005, 0.457, 12.241]} />
-      <mesh ref={(el) => setRef(el, "Arm034", 0.0000, 0)} geometry={nodes.Arm034.geometry} material={premiumMaterials.gunmetal} position={[0.008, -33.18, 12.242]} />
-      <mesh ref={(el) => setRef(el, "Arm037", 0.1613, 0)} geometry={nodes.Arm037.geometry} material={premiumMaterials.warmGray} position={[-15.65, 23.763, 8.768]} />
-      <mesh ref={(el) => setRef(el, "Arm038", 0.1694, 1)} geometry={nodes.Arm038.geometry} material={premiumMaterials.gunmetal} position={[-15.4, 28.357, 15.843]} />
-      <mesh ref={(el) => setRef(el, "Arm039", 0.1532, 5)} geometry={nodes.Arm039.geometry} material={premiumMaterials.darkCopper} position={[-15.185, 23.532, 12.279]} />
-      <mesh ref={(el) => setRef(el, "Arm041", 0.2419, 0)} geometry={nodes.Arm041.geometry} material={premiumMaterials.gunmetal} position={[12.85, 49.85, 21.6]} />
-      <mesh ref={(el) => setRef(el, "Arm042", 0.2500, 1)} geometry={nodes.Arm042.geometry} material={premiumMaterials.darkCopper} position={[12.85, 49.85, 2.9]} />
-      <mesh ref={(el) => setRef(el, "Arm043", 0.1774, 0)} geometry={nodes.Arm043.geometry} material={premiumMaterials.darkCopper} position={[13.385, 32.854, 3.042]} />
-      <mesh ref={(el) => setRef(el, "Arm044", 0.1935, 0)} geometry={nodes.Arm044.geometry} material={premiumMaterials.gunmetal} position={[12.666, 36.183, 1.555]} />
-      <mesh ref={(el) => setRef(el, "Arm045", 0.1855, 1)} geometry={nodes.Arm045.geometry} material={premiumMaterials.warmGray} position={[13.385, 32.854, 21.458]} />
-      <mesh ref={(el) => setRef(el, "Arm046", 0.2016, 1)} geometry={nodes.Arm046.geometry} material={premiumMaterials.darkCopper} position={[12.666, 36.183, 22.945]} />
-      <mesh ref={(el) => setRef(el, "Arm047", 0.2339, 5)} geometry={nodes.Arm047.geometry} material={premiumMaterials.warmGray} position={[12.7, 42.75, 12.25]} />
-      <mesh ref={(el) => setRef(el, "Arm048", 0.1452, 4)} geometry={nodes.Arm048.geometry} material={premiumMaterials.gunmetal} position={[-4.898, 17.237, 13.526]} />
-      <mesh ref={(el) => setRef(el, "Arm049", 0.2097, 2)} geometry={nodes.Arm049.geometry} material={premiumMaterials.warmGray} position={[4.02, 37.894, 12.178]} />
-      <mesh ref={(el) => setRef(el, "Arm050", 0.2258, 4)} geometry={nodes.Arm050.geometry} material={premiumMaterials.darkCopper} position={[-12.143, 42.748, 12.256]} />
-      <mesh ref={(el) => setRef(el, "Group_Base", 0.2177, 3)} geometry={nodes.Group_Base.geometry} material={premiumMaterials.darkCopper} position={[-17.207, 42.741, 12.245]} />
-      <mesh ref={(el) => setRef(el, "Arm053", 0.3387, 0)} geometry={nodes.Arm053.geometry} material={premiumMaterials.gunmetal} position={[1.772, 89.448, 9.237]} />
-      <mesh ref={(el) => setRef(el, "Arm054", 0.3790, 3)} geometry={nodes.Arm054.geometry} material={premiumMaterials.warmGray} position={[-0.248, 108.822, 8.957]} />
-      <mesh ref={(el) => setRef(el, "Arm055", 0.3871, 4)} geometry={nodes.Arm055.geometry} material={premiumMaterials.gunmetal} position={[3.232, 108.9, 5.763]} />
-      <mesh ref={(el) => setRef(el, "Arm056", 0.3710, 2)} geometry={nodes.Arm056.geometry} material={premiumMaterials.darkCopper} position={[-3.843, 108.65, 10.357]} />
-      <mesh ref={(el) => setRef(el, "Arm057", 0.3629, 1)} geometry={nodes.Arm057.geometry} material={premiumMaterials.gunmetal} position={[-0.279, 108.435, 5.532]} />
-      <mesh ref={(el) => setRef(el, "Arm058", 0.2661, 1)} geometry={nodes.Arm058.geometry} material={premiumMaterials.gunmetal} position={[-0.283, 77.984, 9.816]} />
-      <mesh ref={(el) => setRef(el, "Arm059", 0.2903, 2)} geometry={nodes.Arm059.geometry} material={premiumMaterials.gunmetal} position={[-9.6, 80.4, 31.85]} />
-      <mesh ref={(el) => setRef(el, "Arm060", 0.2984, 3)} geometry={nodes.Arm060.geometry} material={premiumMaterials.darkCopper} position={[9.1, 80.4, 31.85]} />
-      <mesh ref={(el) => setRef(el, "Arm061", 0.2742, 0)} geometry={nodes.Arm061.geometry} material={premiumMaterials.darkCopper} position={[8.958, 79.865, 14.854]} />
-      <mesh ref={(el) => setRef(el, "Arm062", 0.3145, 5)} geometry={nodes.Arm062.geometry} material={premiumMaterials.gunmetal} position={[10.445, 80.584, 18.183]} />
-      <mesh ref={(el) => setRef(el, "Arm063", 0.2823, 1)} geometry={nodes.Arm063.geometry} material={premiumMaterials.warmGray} position={[-9.458, 79.865, 14.854]} />
-      <mesh ref={(el) => setRef(el, "Arm064", 0.3226, 0)} geometry={nodes.Arm064.geometry} material={premiumMaterials.darkCopper} position={[-10.945, 80.584, 18.183]} />
-      <mesh ref={(el) => setRef(el, "Arm065", 0.3065, 4)} geometry={nodes.Arm065.geometry} material={premiumMaterials.warmGray} position={[-0.25, 80.55, 24.75]} />
-      <mesh ref={(el) => setRef(el, "Arm066", 0.3468, 1)} geometry={nodes.Arm066.geometry} material={premiumMaterials.darkCopper} position={[-1.526, 98.148, -0.763]} />
-      <mesh ref={(el) => setRef(el, "Arm067", 0.3306, 1)} geometry={nodes.Arm067.geometry} material={premiumMaterials.warmGray} position={[-0.178, 89.23, 19.894]} />
-      <mesh ref={(el) => setRef(el, "Arm068", 0.3548, 0)} geometry={nodes.Arm068.geometry} material={premiumMaterials.warmGray} position={[-0.256, 105.393, 24.748]} />
-      <mesh ref={(el) => setRef(el, "Arm069", 0.3952, 5)} geometry={nodes.Arm069.geometry} material={premiumMaterials.darkCopper} position={[-0.245, 110.457, 24.741]} />
-      <mesh ref={(el) => setRef(el, "Arm070", 0.2581, 0)} geometry={nodes.Arm070.geometry} material={premiumMaterials.warmGray} position={[-0.242, 76.821, 24.742]} />
-      <mesh ref={(el) => setRef(el, "Group_Lower_Arm", 0.6210, 3)} geometry={nodes.Group_Lower_Arm.geometry} material={premiumMaterials.gunmetal} position={[-3.552, 252.022, -1.987]} />
-      <mesh ref={(el) => setRef(el, "Arm073", 0.6694, 1)} geometry={nodes.Arm073.geometry} material={premiumMaterials.warmGray} position={[15.9, 253.482, 1.487]} />
-      <mesh ref={(el) => setRef(el, "Arm074", 0.4677, 4)} geometry={nodes.Arm074.geometry} material={premiumMaterials.darkCopper} position={[15.65, 246.407, -3.107]} />
-      <mesh ref={(el) => setRef(el, "Arm075", 0.5726, 1)} geometry={nodes.Arm075.geometry} material={premiumMaterials.warmGray} position={[15.435, 249.971, 1.718]} />
-      <mesh ref={(el) => setRef(el, "Arm077", 0.4194, 0)} geometry={nodes.Arm077.geometry} material={premiumMaterials.darkCopper} position={[-12.6, 240.65, -24.6]} />
-      <mesh ref={(el) => setRef(el, "Arm078", 0.7500, 1)} geometry={nodes.Arm078.geometry} material={premiumMaterials.gunmetal} position={[-12.6, 259.35, -24.6]} />
-      <mesh ref={(el) => setRef(el, "Arm079", 0.7419, 0)} geometry={nodes.Arm079.geometry} material={premiumMaterials.warmGray} position={[-13.135, 259.208, -7.604]} />
-      <mesh ref={(el) => setRef(el, "Arm080", 0.7661, 1)} geometry={nodes.Arm080.geometry} material={premiumMaterials.warmGray} position={[-12.416, 260.695, -10.933]} />
-      <mesh ref={(el) => setRef(el, "Arm081", 0.4274, 1)} geometry={nodes.Arm081.geometry} material={premiumMaterials.warmGray} position={[-13.135, 240.792, -7.604]} />
-      <mesh ref={(el) => setRef(el, "Arm082", 0.4113, 1)} geometry={nodes.Arm082.geometry} material={premiumMaterials.gunmetal} position={[-12.416, 239.305, -10.933]} />
-      <mesh ref={(el) => setRef(el, "Arm083", 0.5887, 1)} geometry={nodes.Arm083.geometry} material={premiumMaterials.darkCopper} position={[-12.45, 250, -17.5]} />
-      <mesh ref={(el) => setRef(el, "Arm084", 0.5403, 3)} geometry={nodes.Arm084.geometry} material={premiumMaterials.darkCopper} position={[5.148, 248.724, 8.013]} />
-      <mesh ref={(el) => setRef(el, "Arm085", 0.6048, 1)} geometry={nodes.Arm085.geometry} material={premiumMaterials.gunmetal} position={[-3.77, 250.072, -12.644]} />
-      <mesh ref={(el) => setRef(el, "Arm086", 0.5806, 0)} geometry={nodes.Arm086.geometry} material={premiumMaterials.gunmetal} position={[12.393, 249.994, -17.498]} />
-      <mesh ref={(el) => setRef(el, "Arm089", 0.4839, 0)} geometry={nodes.Arm089.geometry} material={premiumMaterials.gunmetal} position={[2.022, 246.987, -64.948]} />
-      <mesh ref={(el) => setRef(el, "Arm090", 0.4758, 5)} geometry={nodes.Arm090.geometry} material={premiumMaterials.warmGray} position={[0.002, 246.707, -84.322]} />
-      <mesh ref={(el) => setRef(el, "Arm091", 0.4435, 1)} geometry={nodes.Arm091.geometry} material={premiumMaterials.darkCopper} position={[3.482, 243.513, -84.4]} />
-      <mesh ref={(el) => setRef(el, "Arm092", 0.5000, 0)} geometry={nodes.Arm092.geometry} material={premiumMaterials.warmGray} position={[-3.593, 248.107, -84.15]} />
-      <mesh ref={(el) => setRef(el, "Arm093", 0.4355, 0)} geometry={nodes.Arm093.geometry} material={premiumMaterials.gunmetal} position={[-0.029, 243.282, -83.935]} />
-      <mesh ref={(el) => setRef(el, "Arm094", 0.4919, 1)} geometry={nodes.Arm094.geometry} material={premiumMaterials.darkCopper} position={[-0.033, 247.566, -53.484]} />
-      <mesh ref={(el) => setRef(el, "Arm095", 0.9274, 1)} geometry={nodes.Arm095.geometry} material={premiumMaterials.darkCopper} position={[-9.35, 269.6, -55.9]} />
-      <mesh ref={(el) => setRef(el, "Arm096", 0.9355, 2)} geometry={nodes.Arm096.geometry} material={premiumMaterials.warmGray} position={[9.35, 269.6, -55.9]} />
-      <mesh ref={(el) => setRef(el, "Arm097", 0.6371, 5)} geometry={nodes.Arm097.geometry} material={premiumMaterials.darkCopper} position={[9.208, 252.604, -55.365]} />
-      <mesh ref={(el) => setRef(el, "Arm098", 0.6935, 2)} geometry={nodes.Arm098.geometry} material={premiumMaterials.warmGray} position={[10.695, 255.933, -56.084]} />
-      <mesh ref={(el) => setRef(el, "Arm099", 0.6452, 0)} geometry={nodes.Arm099.geometry} material={premiumMaterials.warmGray} position={[-9.208, 252.604, -55.365]} />
-      <mesh ref={(el) => setRef(el, "Arm100", 0.7016, 3)} geometry={nodes.Arm100.geometry} material={premiumMaterials.gunmetal} position={[-10.695, 255.933, -56.084]} />
-      <mesh ref={(el) => setRef(el, "Arm101", 0.8629, 3)} geometry={nodes.Arm101.geometry} material={premiumMaterials.warmGray} position={[0, 262.5, -56.05]} />
-      <mesh ref={(el) => setRef(el, "Arm102", 0.4032, 0)} geometry={nodes.Arm102.geometry} material={premiumMaterials.warmGray} position={[-1.276, 236.987, -73.648]} />
-      <mesh ref={(el) => setRef(el, "Arm103", 0.7258, 0)} geometry={nodes.Arm103.geometry} material={premiumMaterials.gunmetal} position={[0.072, 257.644, -64.73]} />
-      <mesh ref={(el) => setRef(el, "Arm104", 0.8548, 2)} geometry={nodes.Arm104.geometry} material={premiumMaterials.darkCopper} position={[-0.006, 262.498, -80.893]} />
-      <mesh ref={(el) => setRef(el, "Arm106", 0.8468, 1)} geometry={nodes.Arm106.geometry} material={premiumMaterials.gunmetal} position={[0.008, 262.492, -52.32]} />
-      <mesh ref={(el) => setRef(el, "Group_Lower_Arm-2", 0.8065, 0)} geometry={nodes['Group_Lower_Arm-2'].geometry} material={premiumMaterials.gunmetal} position={[-15.072, 262.248, -177.457]} />
-      <mesh ref={(el) => setRef(el, "Arm109", 0.7339, 1)} geometry={nodes.Arm109.geometry} material={premiumMaterials.darkCopper} position={[-15.15, 258.768, -174.263]} />
-      <mesh ref={(el) => setRef(el, "Arm110", 0.9032, 0)} geometry={nodes.Arm110.geometry} material={premiumMaterials.darkCopper} position={[-14.9, 265.843, -178.857]} />
-      <mesh ref={(el) => setRef(el, "Arm111", 0.8387, 0)} geometry={nodes.Arm111.geometry} material={premiumMaterials.warmGray} position={[-14.685, 262.279, -174.032]} />
-      <mesh ref={(el) => setRef(el, "Arm113", 0.9516, 4)} geometry={nodes.Arm113.geometry} material={premiumMaterials.darkCopper} position={[13.35, 271.6, -200.35]} />
-      <mesh ref={(el) => setRef(el, "Arm114", 0.6532, 1)} geometry={nodes.Arm114.geometry} material={premiumMaterials.gunmetal} position={[13.35, 252.9, -200.35]} />
-      <mesh ref={(el) => setRef(el, "Arm115", 0.6613, 0)} geometry={nodes.Arm115.geometry} material={premiumMaterials.darkCopper} position={[13.885, 253.042, -183.354]} />
-      <mesh ref={(el) => setRef(el, "Arm116", 0.6129, 2)} geometry={nodes.Arm116.geometry} material={premiumMaterials.darkCopper} position={[13.166, 251.555, -186.683]} />
-      <mesh ref={(el) => setRef(el, "Arm117", 0.9435, 3)} geometry={nodes.Arm117.geometry} material={premiumMaterials.gunmetal} position={[13.885, 271.458, -183.354]} />
-      <mesh ref={(el) => setRef(el, "Arm118", 0.9597, 5)} geometry={nodes.Arm118.geometry} material={premiumMaterials.warmGray} position={[13.166, 272.945, -186.683]} />
-      <mesh ref={(el) => setRef(el, "Arm119", 0.8145, 1)} geometry={nodes.Arm119.geometry} material={premiumMaterials.warmGray} position={[13.2, 262.25, -193.25]} />
-      <mesh ref={(el) => setRef(el, "Arm120", 0.8790, 5)} geometry={nodes.Arm120.geometry} material={premiumMaterials.darkCopper} position={[-4.398, 263.526, -167.737]} />
-      <mesh ref={(el) => setRef(el, "Arm121", 0.7823, 3)} geometry={nodes.Arm121.geometry} material={premiumMaterials.darkCopper} position={[4.52, 262.178, -188.394]} />
-      <mesh ref={(el) => setRef(el, "Arm122", 0.8306, 1)} geometry={nodes.Arm122.geometry} material={premiumMaterials.darkCopper} position={[-11.643, 262.256, -193.248]} />
-      <mesh ref={(el) => setRef(el, "Arm123", 0.7984, 5)} geometry={nodes.Arm123.geometry} material={premiumMaterials.gunmetal} position={[-16.707, 262.245, -193.241]} />
-      <mesh ref={(el) => setRef(el, "Arm124", 0.7903, 4)} geometry={nodes.Arm124.geometry} material={premiumMaterials.warmGray} position={[16.93, 262.242, -193.242]} />
-      <mesh ref={(el) => setRef(el, "Arm127", 0.9919, 1)} geometry={nodes.Arm127.geometry} material={premiumMaterials.gunmetal} position={[-3.482, 277.15, -105.763]} />
-      <mesh ref={(el) => setRef(el, "Arm128", 0.9839, 0)} geometry={nodes.Arm128.geometry} material={premiumMaterials.warmGray} position={[3.593, 276.9, -110.357]} />
-      <mesh ref={(el) => setRef(el, "Arm129", 0.9758, 1)} geometry={nodes.Arm129.geometry} material={premiumMaterials.darkCopper} position={[0.029, 276.685, -105.532]} />
-      <mesh ref={(el) => setRef(el, "Group_Lower_Arm-1", 0.4597, 3)} geometry={nodes['Group_Lower_Arm-1'].geometry} material={premiumMaterials.gunmetal} position={[0.033, 246.235, -109.816]} />
-      <mesh ref={(el) => setRef(el, "Arm131", 0.5242, 1)} geometry={nodes.Arm131.geometry} material={premiumMaterials.warmGray} position={[9.35, 248.65, -131.85]} />
-      <mesh ref={(el) => setRef(el, "Arm132", 0.5323, 2)} geometry={nodes.Arm132.geometry} material={premiumMaterials.gunmetal} position={[-9.35, 248.65, -131.85]} />
-      <mesh ref={(el) => setRef(el, "Arm133", 0.5081, 1)} geometry={nodes.Arm133.geometry} material={premiumMaterials.gunmetal} position={[-9.208, 248.115, -114.854]} />
-      <mesh ref={(el) => setRef(el, "Arm134", 0.5565, 5)} geometry={nodes.Arm134.geometry} material={premiumMaterials.gunmetal} position={[-10.695, 248.834, -118.183]} />
-      <mesh ref={(el) => setRef(el, "Arm135", 0.5161, 0)} geometry={nodes.Arm135.geometry} material={premiumMaterials.darkCopper} position={[9.208, 248.115, -114.854]} />
-      <mesh ref={(el) => setRef(el, "Arm136", 0.5645, 0)} geometry={nodes.Arm136.geometry} material={premiumMaterials.darkCopper} position={[10.695, 248.834, -118.183]} />
-      <mesh ref={(el) => setRef(el, "Arm137", 0.5484, 4)} geometry={nodes.Arm137.geometry} material={premiumMaterials.warmGray} position={[0, 248.8, -124.75]} />
-      <mesh ref={(el) => setRef(el, "Arm138", 0.9113, 1)} geometry={nodes.Arm138.geometry} material={premiumMaterials.warmGray} position={[1.276, 266.398, -99.237]} />
-      <mesh ref={(el) => setRef(el, "Arm139", 0.7177, 5)} geometry={nodes.Arm139.geometry} material={premiumMaterials.warmGray} position={[-0.072, 257.48, -119.894]} />
-      <mesh ref={(el) => setRef(el, "Arm140", 0.9677, 0)} geometry={nodes.Arm140.geometry} material={premiumMaterials.gunmetal} position={[0.006, 273.642, -124.748]} />
-      <mesh ref={(el) => setRef(el, "Arm141", 1.0000, 0)} geometry={nodes.Arm141.geometry} material={premiumMaterials.darkCopper} position={[-0.005, 278.706, -124.741]} />
-      <mesh ref={(el) => setRef(el, "Arm142", 0.4516, 2)} geometry={nodes.Arm142.geometry} material={premiumMaterials.warmGray} position={[-0.008, 245.07, -124.742]} />
-      <mesh ref={(el) => setRef(el, "Group_Gripper", 0.9194, 0)} geometry={nodes.Group_Gripper.geometry} material={premiumMaterials.darkCopper} position={[-42.586, 266.857, -265.965]} />
+      <group
+        ref={groupRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          const name = e.object.name;
+          if (name && props.onMeshClick) {
+            props.onMeshClick(name);
+          }
+        }}
+      >
+        <mesh ref={(el) => setRef(el, "Arm004", 0.6855, 1)} geometry={nodes.Arm004.geometry} material={premiumMaterials.logoNavy} position={[-1.735, 255.327, 38.378]} />
+        <mesh ref={(el) => setRef(el, "Arm005", 0.6290, 4)} geometry={nodes.Arm005.geometry} material={premiumMaterials.logoNavy} position={[-4.83, 252.492, 40.419]} />
+        <mesh ref={(el) => setRef(el, "Arm006", 0.8952, 1)} geometry={nodes.Arm006.geometry} material={premiumMaterials.logoCopper} position={[10.236, 265.04, 31.385]} />
+        <mesh ref={(el) => setRef(el, "Arm007", 0.8710, 4)} geometry={nodes.Arm007.geometry} material={premiumMaterials.logoCopper} position={[-0.601, 263.227, 32.691]} />
+        <mesh ref={(el) => setRef(el, "Arm008", 0.7742, 2)} geometry={nodes.Arm008.geometry} material={premiumMaterials.logoCopper} position={[5.178, 260.757, 34.471]} />
+        <mesh ref={(el) => setRef(el, "Arm009", 0.5968, 0)} geometry={nodes.Arm009.geometry} material={premiumMaterials.logoNavy} position={[4.567, 250.057, 42.173]} />
+        <mesh ref={(el) => setRef(el, "Arm010", 0.8226, 0)} geometry={nodes.Arm010.geometry} material={premiumMaterials.logoCopper} position={[6.641, 262.254, 33.402]} />
+        <mesh ref={(el) => setRef(el, "Arm011", 0.7097, 4)} geometry={nodes.Arm011.geometry} material={premiumMaterials.logoCopper} position={[8.304, 255.988, 37.86]} />
+        <mesh ref={(el) => setRef(el, "Arm012", 0.6774, 0)} geometry={nodes.Arm012.geometry} material={premiumMaterials.logoNavy} position={[-9.559, 253.831, 39.455]} />
+        <mesh ref={(el) => setRef(el, "Arm013", 0.8871, 0)} geometry={nodes.Arm013.geometry} material={premiumMaterials.logoCopper} position={[-1.935, 264.535, 31.748]} />
+        <mesh ref={(el) => setRef(el, "Arm014", 0.7581, 0)} geometry={nodes.Arm014.geometry} material={premiumMaterials.logoCopper} position={[12.596, 260.456, 34.686]} />
+        <mesh ref={(el) => setRef(el, "Arm017", 0.0806, 0)} geometry={nodes.Arm017.geometry} material={premiumMaterials.darkCopper} position={[2.022, -20.552, -3.263]} />
+        <mesh ref={(el) => setRef(el, "Arm018", 0.1210, 1)} geometry={nodes.Arm018.geometry} material={premiumMaterials.gunmetal} position={[0.002, -1.178, -3.543]} />
+        <mesh ref={(el) => setRef(el, "Arm019", 0.1290, 2)} geometry={nodes.Arm019.geometry} material={premiumMaterials.darkCopper} position={[3.482, -1.1, -6.737]} />
+        <mesh ref={(el) => setRef(el, "Arm020", 0.1129, 0)} geometry={nodes.Arm020.geometry} material={premiumMaterials.warmGray} position={[-3.593, -1.35, -2.143]} />
+        <mesh ref={(el) => setRef(el, "Arm021", 0.1048, 1)} geometry={nodes.Arm021.geometry} material={premiumMaterials.darkCopper} position={[-0.029, -1.565, -6.968]} />
+        <mesh ref={(el) => setRef(el, "Arm022", 0.0081, 1)} geometry={nodes.Arm022.geometry} material={premiumMaterials.darkCopper} position={[-0.033, -32.015, -2.684]} />
+        <mesh ref={(el) => setRef(el, "Arm023", 0.0323, 0)} geometry={nodes.Arm023.geometry} material={premiumMaterials.darkCopper} position={[-9.35, -29.6, 19.35]} />
+        <mesh ref={(el) => setRef(el, "Arm024", 0.0403, 1)} geometry={nodes.Arm024.geometry} material={premiumMaterials.warmGray} position={[9.35, -29.6, 19.35]} />
+        <mesh ref={(el) => setRef(el, "Arm025", 0.0161, 0)} geometry={nodes.Arm025.geometry} material={premiumMaterials.warmGray} position={[9.208, -30.135, 2.354]} />
+        <mesh ref={(el) => setRef(el, "Arm026", 0.0565, 3)} geometry={nodes.Arm026.geometry} material={premiumMaterials.darkCopper} position={[10.695, -29.416, 5.683]} />
+        <mesh ref={(el) => setRef(el, "Arm027", 0.0242, 1)} geometry={nodes.Arm027.geometry} material={premiumMaterials.gunmetal} position={[-9.208, -30.135, 2.354]} />
+        <mesh ref={(el) => setRef(el, "Arm028", 0.0645, 4)} geometry={nodes.Arm028.geometry} material={premiumMaterials.warmGray} position={[-10.695, -29.416, 5.683]} />
+        <mesh ref={(el) => setRef(el, "Arm029", 0.0484, 2)} geometry={nodes.Arm029.geometry} material={premiumMaterials.gunmetal} position={[0, -29.45, 12.25]} />
+        <mesh ref={(el) => setRef(el, "Arm030", 0.0887, 1)} geometry={nodes.Arm030.geometry} material={premiumMaterials.warmGray} position={[-1.276, -11.852, -13.263]} />
+        <mesh ref={(el) => setRef(el, "Arm031", 0.0726, 5)} geometry={nodes.Arm031.geometry} material={premiumMaterials.gunmetal} position={[0.072, -20.77, 7.394]} />
+        <mesh ref={(el) => setRef(el, "Arm032", 0.0968, 0)} geometry={nodes.Arm032.geometry} material={premiumMaterials.gunmetal} position={[-0.006, -4.607, 12.248]} />
+        <mesh ref={(el) => setRef(el, "Arm033", 0.1371, 3)} geometry={nodes.Arm033.geometry} material={premiumMaterials.warmGray} position={[0.005, 0.457, 12.241]} />
+        <mesh ref={(el) => setRef(el, "Arm034", 0.0000, 0)} geometry={nodes.Arm034.geometry} material={premiumMaterials.gunmetal} position={[0.008, -33.18, 12.242]} />
+        <mesh ref={(el) => setRef(el, "Arm037", 0.1613, 0)} geometry={nodes.Arm037.geometry} material={premiumMaterials.warmGray} position={[-15.65, 23.763, 8.768]} />
+        <mesh ref={(el) => setRef(el, "Arm038", 0.1694, 1)} geometry={nodes.Arm038.geometry} material={premiumMaterials.gunmetal} position={[-15.4, 28.357, 15.843]} />
+        <mesh ref={(el) => setRef(el, "Arm039", 0.1532, 5)} geometry={nodes.Arm039.geometry} material={premiumMaterials.darkCopper} position={[-15.185, 23.532, 12.279]} />
+        <mesh ref={(el) => setRef(el, "Arm041", 0.2419, 0)} geometry={nodes.Arm041.geometry} material={premiumMaterials.gunmetal} position={[12.85, 49.85, 21.6]} />
+        <mesh ref={(el) => setRef(el, "Arm042", 0.2500, 1)} geometry={nodes.Arm042.geometry} material={premiumMaterials.darkCopper} position={[12.85, 49.85, 2.9]} />
+        <mesh ref={(el) => setRef(el, "Arm043", 0.1774, 0)} geometry={nodes.Arm043.geometry} material={premiumMaterials.darkCopper} position={[13.385, 32.854, 3.042]} />
+        <mesh ref={(el) => setRef(el, "Arm044", 0.1935, 0)} geometry={nodes.Arm044.geometry} material={premiumMaterials.gunmetal} position={[12.666, 36.183, 1.555]} />
+        <mesh ref={(el) => setRef(el, "Arm045", 0.1855, 1)} geometry={nodes.Arm045.geometry} material={premiumMaterials.warmGray} position={[13.385, 32.854, 21.458]} />
+        <mesh ref={(el) => setRef(el, "Arm046", 0.2016, 1)} geometry={nodes.Arm046.geometry} material={premiumMaterials.darkCopper} position={[12.666, 36.183, 22.945]} />
+        <mesh ref={(el) => setRef(el, "Arm047", 0.2339, 5)} geometry={nodes.Arm047.geometry} material={premiumMaterials.warmGray} position={[12.7, 42.75, 12.25]} />
+        <mesh ref={(el) => setRef(el, "Arm048", 0.1452, 4)} geometry={nodes.Arm048.geometry} material={premiumMaterials.gunmetal} position={[-4.898, 17.237, 13.526]} />
+        <mesh ref={(el) => setRef(el, "Arm049", 0.2097, 2)} geometry={nodes.Arm049.geometry} material={premiumMaterials.warmGray} position={[4.02, 37.894, 12.178]} />
+        <mesh ref={(el) => setRef(el, "Arm050", 0.2258, 4)} geometry={nodes.Arm050.geometry} material={premiumMaterials.darkCopper} position={[-12.143, 42.748, 12.256]} />
+        <mesh ref={(el) => setRef(el, "Group_Base", 0.2177, 3)} geometry={nodes.Group_Base.geometry} material={premiumMaterials.darkCopper} position={[-17.207, 42.741, 12.245]} />
+        <mesh ref={(el) => setRef(el, "Arm053", 0.3387, 0)} geometry={nodes.Arm053.geometry} material={premiumMaterials.gunmetal} position={[1.772, 89.448, 9.237]} />
+        <mesh ref={(el) => setRef(el, "Arm054", 0.3790, 3)} geometry={nodes.Arm054.geometry} material={premiumMaterials.warmGray} position={[-0.248, 108.822, 8.957]} />
+        <mesh ref={(el) => setRef(el, "Arm055", 0.3871, 4)} geometry={nodes.Arm055.geometry} material={premiumMaterials.gunmetal} position={[3.232, 108.9, 5.763]} />
+        <mesh ref={(el) => setRef(el, "Arm056", 0.3710, 2)} geometry={nodes.Arm056.geometry} material={premiumMaterials.darkCopper} position={[-3.843, 108.65, 10.357]} />
+        <mesh ref={(el) => setRef(el, "Arm057", 0.3629, 1)} geometry={nodes.Arm057.geometry} material={premiumMaterials.gunmetal} position={[-0.279, 108.435, 5.532]} />
+        <mesh ref={(el) => setRef(el, "Arm058", 0.2661, 1)} geometry={nodes.Arm058.geometry} material={premiumMaterials.gunmetal} position={[-0.283, 77.984, 9.816]} />
+        <mesh ref={(el) => setRef(el, "Arm059", 0.2903, 2)} geometry={nodes.Arm059.geometry} material={premiumMaterials.gunmetal} position={[-9.6, 80.4, 31.85]} />
+        <mesh ref={(el) => setRef(el, "Arm060", 0.2984, 3)} geometry={nodes.Arm060.geometry} material={premiumMaterials.darkCopper} position={[9.1, 80.4, 31.85]} />
+        <mesh ref={(el) => setRef(el, "Arm061", 0.2742, 0)} geometry={nodes.Arm061.geometry} material={premiumMaterials.darkCopper} position={[8.958, 79.865, 14.854]} />
+        <mesh ref={(el) => setRef(el, "Arm062", 0.3145, 5)} geometry={nodes.Arm062.geometry} material={premiumMaterials.gunmetal} position={[10.445, 80.584, 18.183]} />
+        <mesh ref={(el) => setRef(el, "Arm063", 0.2823, 1)} geometry={nodes.Arm063.geometry} material={premiumMaterials.warmGray} position={[-9.458, 79.865, 14.854]} />
+        <mesh ref={(el) => setRef(el, "Arm064", 0.3226, 0)} geometry={nodes.Arm064.geometry} material={premiumMaterials.darkCopper} position={[-10.945, 80.584, 18.183]} />
+        <mesh ref={(el) => setRef(el, "Arm065", 0.3065, 4)} geometry={nodes.Arm065.geometry} material={premiumMaterials.warmGray} position={[-0.25, 80.55, 24.75]} />
+        <mesh ref={(el) => setRef(el, "Arm066", 0.3468, 1)} geometry={nodes.Arm066.geometry} material={premiumMaterials.darkCopper} position={[-1.526, 98.148, -0.763]} />
+        <mesh ref={(el) => setRef(el, "Arm067", 0.3306, 1)} geometry={nodes.Arm067.geometry} material={premiumMaterials.warmGray} position={[-0.178, 89.23, 19.894]} />
+        <mesh ref={(el) => setRef(el, "Arm068", 0.3548, 0)} geometry={nodes.Arm068.geometry} material={premiumMaterials.warmGray} position={[-0.256, 105.393, 24.748]} />
+        <mesh ref={(el) => setRef(el, "Arm069", 0.3952, 5)} geometry={nodes.Arm069.geometry} material={premiumMaterials.darkCopper} position={[-0.245, 110.457, 24.741]} />
+        <mesh ref={(el) => setRef(el, "Arm070", 0.2581, 0)} geometry={nodes.Arm070.geometry} material={premiumMaterials.warmGray} position={[-0.242, 76.821, 24.742]} />
+        <mesh ref={(el) => setRef(el, "Group_Lower_Arm", 0.6210, 3)} geometry={nodes.Group_Lower_Arm.geometry} material={premiumMaterials.gunmetal} position={[-3.552, 252.022, -1.987]} />
+        <mesh ref={(el) => setRef(el, "Arm073", 0.6694, 1)} geometry={nodes.Arm073.geometry} material={premiumMaterials.warmGray} position={[15.9, 253.482, 1.487]} />
+        <mesh ref={(el) => setRef(el, "Arm074", 0.4677, 4)} geometry={nodes.Arm074.geometry} material={premiumMaterials.darkCopper} position={[15.65, 246.407, -3.107]} />
+        <mesh ref={(el) => setRef(el, "Arm075", 0.5726, 1)} geometry={nodes.Arm075.geometry} material={premiumMaterials.warmGray} position={[15.435, 249.971, 1.718]} />
+        <mesh ref={(el) => setRef(el, "Arm077", 0.4194, 0)} geometry={nodes.Arm077.geometry} material={premiumMaterials.darkCopper} position={[-12.6, 240.65, -24.6]} />
+        <mesh ref={(el) => setRef(el, "Arm078", 0.7500, 1)} geometry={nodes.Arm078.geometry} material={premiumMaterials.gunmetal} position={[-12.6, 259.35, -24.6]} />
+        <mesh ref={(el) => setRef(el, "Arm079", 0.7419, 0)} geometry={nodes.Arm079.geometry} material={premiumMaterials.warmGray} position={[-13.135, 259.208, -7.604]} />
+        <mesh ref={(el) => setRef(el, "Arm080", 0.7661, 1)} geometry={nodes.Arm080.geometry} material={premiumMaterials.warmGray} position={[-12.416, 260.695, -10.933]} />
+        <mesh ref={(el) => setRef(el, "Arm081", 0.4274, 1)} geometry={nodes.Arm081.geometry} material={premiumMaterials.warmGray} position={[-13.135, 240.792, -7.604]} />
+        <mesh ref={(el) => setRef(el, "Arm082", 0.4113, 1)} geometry={nodes.Arm082.geometry} material={premiumMaterials.gunmetal} position={[-12.416, 239.305, -10.933]} />
+        <mesh ref={(el) => setRef(el, "Arm083", 0.5887, 1)} geometry={nodes.Arm083.geometry} material={premiumMaterials.darkCopper} position={[-12.45, 250, -17.5]} />
+        <mesh ref={(el) => setRef(el, "Arm084", 0.5403, 3)} geometry={nodes.Arm084.geometry} material={premiumMaterials.darkCopper} position={[5.148, 248.724, 8.013]} />
+        <mesh ref={(el) => setRef(el, "Arm085", 0.6048, 1)} geometry={nodes.Arm085.geometry} material={premiumMaterials.gunmetal} position={[-3.77, 250.072, -12.644]} />
+        <mesh ref={(el) => setRef(el, "Arm086", 0.5806, 0)} geometry={nodes.Arm086.geometry} material={premiumMaterials.gunmetal} position={[12.393, 249.994, -17.498]} />
+        <mesh ref={(el) => setRef(el, "Arm089", 0.4839, 0)} geometry={nodes.Arm089.geometry} material={premiumMaterials.gunmetal} position={[2.022, 246.987, -64.948]} />
+        <mesh ref={(el) => setRef(el, "Arm090", 0.4758, 5)} geometry={nodes.Arm090.geometry} material={premiumMaterials.warmGray} position={[0.002, 246.707, -84.322]} />
+        <mesh ref={(el) => setRef(el, "Arm091", 0.4435, 1)} geometry={nodes.Arm091.geometry} material={premiumMaterials.darkCopper} position={[3.482, 243.513, -84.4]} />
+        <mesh ref={(el) => setRef(el, "Arm092", 0.5000, 0)} geometry={nodes.Arm092.geometry} material={premiumMaterials.warmGray} position={[-3.593, 248.107, -84.15]} />
+        <mesh ref={(el) => setRef(el, "Arm093", 0.4355, 0)} geometry={nodes.Arm093.geometry} material={premiumMaterials.gunmetal} position={[-0.029, 243.282, -83.935]} />
+        <mesh ref={(el) => setRef(el, "Arm094", 0.4919, 1)} geometry={nodes.Arm094.geometry} material={premiumMaterials.darkCopper} position={[-0.033, 247.566, -53.484]} />
+        <mesh ref={(el) => setRef(el, "Arm095", 0.9274, 1)} geometry={nodes.Arm095.geometry} material={premiumMaterials.darkCopper} position={[-9.35, 269.6, -55.9]} />
+        <mesh ref={(el) => setRef(el, "Arm096", 0.9355, 2)} geometry={nodes.Arm096.geometry} material={premiumMaterials.warmGray} position={[9.35, 269.6, -55.9]} />
+        <mesh ref={(el) => setRef(el, "Arm097", 0.6371, 5)} geometry={nodes.Arm097.geometry} material={premiumMaterials.darkCopper} position={[9.208, 252.604, -55.365]} />
+        <mesh ref={(el) => setRef(el, "Arm098", 0.6935, 2)} geometry={nodes.Arm098.geometry} material={premiumMaterials.warmGray} position={[10.695, 255.933, -56.084]} />
+        <mesh ref={(el) => setRef(el, "Arm099", 0.6452, 0)} geometry={nodes.Arm099.geometry} material={premiumMaterials.warmGray} position={[-9.208, 252.604, -55.365]} />
+        <mesh ref={(el) => setRef(el, "Arm100", 0.7016, 3)} geometry={nodes.Arm100.geometry} material={premiumMaterials.gunmetal} position={[-10.695, 255.933, -56.084]} />
+        <mesh ref={(el) => setRef(el, "Arm101", 0.8629, 3)} geometry={nodes.Arm101.geometry} material={premiumMaterials.warmGray} position={[0, 262.5, -56.05]} />
+        <mesh ref={(el) => setRef(el, "Arm102", 0.4032, 0)} geometry={nodes.Arm102.geometry} material={premiumMaterials.warmGray} position={[-1.276, 236.987, -73.648]} />
+        <mesh ref={(el) => setRef(el, "Arm103", 0.7258, 0)} geometry={nodes.Arm103.geometry} material={premiumMaterials.gunmetal} position={[0.072, 257.644, -64.73]} />
+        <mesh ref={(el) => setRef(el, "Arm104", 0.8548, 2)} geometry={nodes.Arm104.geometry} material={premiumMaterials.darkCopper} position={[-0.006, 262.498, -80.893]} />
+        <mesh ref={(el) => setRef(el, "Arm106", 0.8468, 1)} geometry={nodes.Arm106.geometry} material={premiumMaterials.gunmetal} position={[0.008, 262.492, -52.32]} />
+        <mesh ref={(el) => setRef(el, "Group_Lower_Arm-2", 0.8065, 0)} geometry={nodes['Group_Lower_Arm-2'].geometry} material={premiumMaterials.gunmetal} position={[-15.072, 262.248, -177.457]} />
+        <mesh ref={(el) => setRef(el, "Arm109", 0.7339, 1)} geometry={nodes.Arm109.geometry} material={premiumMaterials.darkCopper} position={[-15.15, 258.768, -174.263]} />
+        <mesh ref={(el) => setRef(el, "Arm110", 0.9032, 0)} geometry={nodes.Arm110.geometry} material={premiumMaterials.darkCopper} position={[-14.9, 265.843, -178.857]} />
+        <mesh ref={(el) => setRef(el, "Arm111", 0.8387, 0)} geometry={nodes.Arm111.geometry} material={premiumMaterials.warmGray} position={[-14.685, 262.279, -174.032]} />
+        <mesh ref={(el) => setRef(el, "Arm113", 0.9516, 4)} geometry={nodes.Arm113.geometry} material={premiumMaterials.darkCopper} position={[13.35, 271.6, -200.35]} />
+        <mesh ref={(el) => setRef(el, "Arm114", 0.6532, 1)} geometry={nodes.Arm114.geometry} material={premiumMaterials.gunmetal} position={[13.35, 252.9, -200.35]} />
+        <mesh ref={(el) => setRef(el, "Arm115", 0.6613, 0)} geometry={nodes.Arm115.geometry} material={premiumMaterials.darkCopper} position={[13.885, 253.042, -183.354]} />
+        <mesh ref={(el) => setRef(el, "Arm116", 0.6129, 2)} geometry={nodes.Arm116.geometry} material={premiumMaterials.darkCopper} position={[13.166, 251.555, -186.683]} />
+        <mesh ref={(el) => setRef(el, "Arm117", 0.9435, 3)} geometry={nodes.Arm117.geometry} material={premiumMaterials.gunmetal} position={[13.885, 271.458, -183.354]} />
+        <mesh ref={(el) => setRef(el, "Arm118", 0.9597, 5)} geometry={nodes.Arm118.geometry} material={premiumMaterials.warmGray} position={[13.166, 272.945, -186.683]} />
+        <mesh ref={(el) => setRef(el, "Arm119", 0.8145, 1)} geometry={nodes.Arm119.geometry} material={premiumMaterials.warmGray} position={[13.2, 262.25, -193.25]} />
+        <mesh ref={(el) => setRef(el, "Arm120", 0.8790, 5)} geometry={nodes.Arm120.geometry} material={premiumMaterials.darkCopper} position={[-4.398, 263.526, -167.737]} />
+        <mesh ref={(el) => setRef(el, "Arm121", 0.7823, 3)} geometry={nodes.Arm121.geometry} material={premiumMaterials.darkCopper} position={[4.52, 262.178, -188.394]} />
+        <mesh ref={(el) => setRef(el, "Arm122", 0.8306, 1)} geometry={nodes.Arm122.geometry} material={premiumMaterials.darkCopper} position={[-11.643, 262.256, -193.248]} />
+        <mesh ref={(el) => setRef(el, "Arm123", 0.7984, 5)} geometry={nodes.Arm123.geometry} material={premiumMaterials.gunmetal} position={[-16.707, 262.245, -193.241]} />
+        <mesh ref={(el) => setRef(el, "Arm124", 0.7903, 4)} geometry={nodes.Arm124.geometry} material={premiumMaterials.warmGray} position={[16.93, 262.242, -193.242]} />
+        <mesh ref={(el) => setRef(el, "Arm127", 0.9919, 1)} geometry={nodes.Arm127.geometry} material={premiumMaterials.gunmetal} position={[-3.482, 277.15, -105.763]} />
+        <mesh ref={(el) => setRef(el, "Arm128", 0.9839, 0)} geometry={nodes.Arm128.geometry} material={premiumMaterials.warmGray} position={[3.593, 276.9, -110.357]} />
+        <mesh ref={(el) => setRef(el, "Arm129", 0.9758, 1)} geometry={nodes.Arm129.geometry} material={premiumMaterials.darkCopper} position={[0.029, 276.685, -105.532]} />
+        <mesh ref={(el) => setRef(el, "Group_Lower_Arm-1", 0.4597, 3)} geometry={nodes['Group_Lower_Arm-1'].geometry} material={premiumMaterials.gunmetal} position={[0.033, 246.235, -109.816]} />
+        <mesh ref={(el) => setRef(el, "Arm131", 0.5242, 1)} geometry={nodes.Arm131.geometry} material={premiumMaterials.warmGray} position={[9.35, 248.65, -131.85]} />
+        <mesh ref={(el) => setRef(el, "Arm132", 0.5323, 2)} geometry={nodes.Arm132.geometry} material={premiumMaterials.gunmetal} position={[-9.35, 248.65, -131.85]} />
+        <mesh ref={(el) => setRef(el, "Arm133", 0.5081, 1)} geometry={nodes.Arm133.geometry} material={premiumMaterials.gunmetal} position={[-9.208, 248.115, -114.854]} />
+        <mesh ref={(el) => setRef(el, "Arm134", 0.5565, 5)} geometry={nodes.Arm134.geometry} material={premiumMaterials.gunmetal} position={[-10.695, 248.834, -118.183]} />
+        <mesh ref={(el) => setRef(el, "Arm135", 0.5161, 0)} geometry={nodes.Arm135.geometry} material={premiumMaterials.darkCopper} position={[9.208, 248.115, -114.854]} />
+        <mesh ref={(el) => setRef(el, "Arm136", 0.5645, 0)} geometry={nodes.Arm136.geometry} material={premiumMaterials.darkCopper} position={[10.695, 248.834, -118.183]} />
+        <mesh ref={(el) => setRef(el, "Arm137", 0.5484, 4)} geometry={nodes.Arm137.geometry} material={premiumMaterials.warmGray} position={[0, 248.8, -124.75]} />
+        <mesh ref={(el) => setRef(el, "Arm138", 0.9113, 1)} geometry={nodes.Arm138.geometry} material={premiumMaterials.warmGray} position={[1.276, 266.398, -99.237]} />
+        <mesh ref={(el) => setRef(el, "Arm139", 0.7177, 5)} geometry={nodes.Arm139.geometry} material={premiumMaterials.warmGray} position={[-0.072, 257.48, -119.894]} />
+        <mesh ref={(el) => setRef(el, "Arm140", 0.9677, 0)} geometry={nodes.Arm140.geometry} material={premiumMaterials.gunmetal} position={[0.006, 273.642, -124.748]} />
+        <mesh ref={(el) => setRef(el, "Arm141", 1.0000, 0)} geometry={nodes.Arm141.geometry} material={premiumMaterials.darkCopper} position={[-0.005, 278.706, -124.741]} />
+        <mesh ref={(el) => setRef(el, "Arm142", 0.4516, 2)} geometry={nodes.Arm142.geometry} material={premiumMaterials.warmGray} position={[-0.008, 245.07, -124.742]} />
+        <mesh ref={(el) => setRef(el, "Group_Gripper", 0.9194, 0)} geometry={nodes.Group_Gripper.geometry} material={premiumMaterials.darkCopper} position={[-42.586, 266.857, -265.965]} />
+      </group>
+      <points ref={particlesRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[new Float32Array(particlesCount * 3), 3]}
+          />
+          <bufferAttribute
+            attach="attributes-color"
+            args={[new Float32Array(particlesCount * 3), 3]}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          size={8.5}
+          vertexColors
+          transparent
+          opacity={0.8}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </points>
     </group>
   )
 }
