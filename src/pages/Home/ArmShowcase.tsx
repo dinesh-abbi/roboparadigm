@@ -340,6 +340,7 @@ export function ArmShowcase() {
         </div>
 
         {/* Floating Part Inspector */}
+        {/* Disabled for now */ false && (
         <div className="absolute top-24 right-8 z-30 flex flex-col items-end gap-3 pointer-events-auto">
           <div className="backdrop-blur-md bg-black/40 border border-white/[0.08] px-4 py-3 rounded-xl min-w-[280px] max-w-sm transition-all duration-300">
             <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2">
@@ -445,6 +446,7 @@ export function ArmShowcase() {
             )}
           </div>
         </div>
+        )}
 
         {/* ── Text panel — bottom-left, anime.js style ────────────────────── */}
         <div className="absolute inset-0 pointer-events-none">
