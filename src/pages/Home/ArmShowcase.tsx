@@ -6,9 +6,9 @@ import { Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { animate as animeAnimate, stagger as animeStagger } from "animejs";
 import * as THREE from "three";
-// @ts-expect-error no TS declaration
-import { Model as RoboarmModel } from "../../../Roboarm";
+import { Model as RoboarmModel } from "@/components/robot/Roboarm";
 import { OrbitControls } from "@react-three/drei";
+import { useControls, button } from "leva";
 
 const AMBER = "#d4884c";
 
@@ -32,7 +32,7 @@ const CHAPTERS = [
     bgWord: "ROBOTICS",
     title: ["RoboParadigm", "Intelligent Systems"],
     body: "We build affordable, state-of-the-art robotic systems designed to automate real-world complexity, beginning with our signature 7-DOF arm.",
-    cam: { pos: [0, 0.66, 5.0] as [number,number,number], tgt: [0, 0.66, 1.8] as [number,number,number], fov: 38 },
+    cam: { pos: [0, 0.66, 5.0] as [number, number, number], tgt: [0, 0.66, 1.8] as [number, number, number], fov: 38 },
     gp: 0.0, cta: false,
   },
   {
@@ -40,7 +40,7 @@ const CHAPTERS = [
     bgWord: "VISION",
     title: ["Machines", "That See"],
     body: "Deep learning and depth sensing enable real-time scene understanding — from delicate PCBs to dynamic industrial objects.",
-    cam: { pos: [0, -1.5, 7] as [number,number,number], tgt: [0, -1.5, 0] as [number,number,number], fov: 48 },
+    cam: { pos: [0, -1.5, 7] as [number, number, number], tgt: [0, -1.5, 0] as [number, number, number], fov: 48 },
     gp: 0.12, cta: false,
   },
   {
@@ -48,7 +48,7 @@ const CHAPTERS = [
     bgWord: "THINK",
     title: ["Robots That", "Plan and Decide"],
     body: "Our agentic AI pipeline reasons over task goals, calculates positions, and generates precise robotic execution plans in real time.",
-    cam: { pos: [-7, 1.5, 4] as [number,number,number], tgt: [0, 0.5, 0] as [number,number,number], fov: 46 },
+    cam: { pos: [-7, 1.5, 4] as [number, number, number], tgt: [0, 0.5, 0] as [number, number, number], fov: 46 },
     gp: 0.38, cta: false,
   },
   {
@@ -56,7 +56,7 @@ const CHAPTERS = [
     bgWord: "PRECISION",
     title: ["Precision", "at Scale"],
     body: "0.1 mm repeatability. 44 Nm peak torque. 7 axes of intelligent force control with interchangeable end-effectors.",
-    cam: { pos: [5, 5.5, 5] as [number,number,number], tgt: [0, 3.5, -1.5] as [number,number,number], fov: 44 },
+    cam: { pos: [5, 5.5, 5] as [number, number, number], tgt: [0, 3.5, -1.5] as [number, number, number], fov: 44 },
     gp: 0.70, cta: false,
   },
   {
@@ -64,7 +64,7 @@ const CHAPTERS = [
     bgWord: "DEPLOY",
     title: ["Built to", "Deploy"],
     body: "Not a prototype. Production-ready with open-source firmware, ROS 2 native integration, and a growing engineering community.",
-    cam: { pos: [1, 5, -9] as [number,number,number], tgt: [0, 1.5, 0] as [number,number,number], fov: 46 },
+    cam: { pos: [1, 5, -9] as [number, number, number], tgt: [0, 1.5, 0] as [number, number, number], fov: 46 },
     gp: 0.0, cta: true,
   },
 ];
@@ -77,7 +77,33 @@ function CameraRig({ progress }: { progress: number }) {
   const tl = useRef(new THREE.Vector3(0, 0.66, 1.8));
   const cl = useRef(new THREE.Vector3(0, 0.66, 1.8));
 
+  const camOverrides = useControls('Camera Simulator', {
+    enabled: false,
+    posX: { value: 0, step: 0.1 },
+    posY: { value: 0.66, step: 0.1 },
+    posZ: { value: 5.0, step: 0.1 },
+    tgtX: { value: 0, step: 0.1 },
+    tgtY: { value: 0.66, step: 0.1 },
+    tgtZ: { value: 1.8, step: 0.1 },
+    fov: { value: 38, step: 1 },
+    'Copy Camera Config': button((get) => {
+      const o = get('Camera Simulator');
+      const str = `pos: [${o.posX.toFixed(3)}, ${o.posY.toFixed(3)}, ${o.posZ.toFixed(3)}], tgt: [${o.tgtX.toFixed(3)}, ${o.tgtY.toFixed(3)}, ${o.tgtZ.toFixed(3)}], fov: ${o.fov.toFixed(1)}`;
+      navigator.clipboard.writeText(str);
+      alert('Copied Camera Config:\\n\\n' + str);
+    })
+  });
+
   useFrame(() => {
+    if (camOverrides.enabled) {
+      camera.position.lerp(new THREE.Vector3(camOverrides.posX, camOverrides.posY, camOverrides.posZ), 0.1);
+      cl.current.lerp(new THREE.Vector3(camOverrides.tgtX, camOverrides.tgtY, camOverrides.tgtZ), 0.1);
+      camera.lookAt(cl.current);
+      cam.fov += (camOverrides.fov - cam.fov) * 0.1;
+      cam.updateProjectionMatrix();
+      return;
+    }
+
     const c = progress * (CHAPTERS.length - 1);
     const b = Math.floor(c), n = Math.min(b + 1, CHAPTERS.length - 1);
     const t = c - b, et = t * t * (3 - 2 * t); // smoothstep
@@ -135,7 +161,7 @@ function Panel({ ch }: { ch: typeof CHAPTERS[0] }) {
         duration: 700,
         ease: "outExpo",
       })
-    , 80);
+      , 80);
     return () => clearTimeout(id);
   }, [ch.i]);
 
@@ -341,111 +367,111 @@ export function ArmShowcase() {
 
         {/* Floating Part Inspector */}
         {/* Disabled for now */ false && (
-        <div className="absolute top-24 right-8 z-30 flex flex-col items-end gap-3 pointer-events-auto">
-          <div className="backdrop-blur-md bg-black/40 border border-white/[0.08] px-4 py-3 rounded-xl min-w-[280px] max-w-sm transition-all duration-300">
-            <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2">
-              <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-semibold">3D Inspector</span>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={logoTuneMode}
-                    onChange={(e) => setLogoTuneMode(e.target.checked)}
-                    className="w-3 h-3 accent-cyan-400 rounded border-zinc-700 bg-zinc-800"
-                  />
-                  <span className="text-[10px] font-mono text-cyan-300 select-none hover:text-white transition-colors">Logo Tune</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={debugFullModel}
-                    onChange={(e) => {
-                      setDebugFullModel(e.target.checked);
-                      setClickedMesh(null);
-                    }}
-                    className="w-3 h-3 accent-amber-500 rounded border-zinc-700 bg-zinc-800"
-                  />
-                  <span className="text-[10px] font-mono text-zinc-300 select-none hover:text-white transition-colors">Full Model</span>
-                </label>
-              </div>
-            </div>
-
-            {logoTuneMode && (
-              <div className="mb-3 border border-cyan-500/20 bg-cyan-500/5 rounded-lg p-2.5">
-                <p className="text-[9px] font-mono text-cyan-400 uppercase tracking-wider mb-2">Logo Rotation Tuner</p>
-                {(['x','y','z'] as const).map((axis) => (
-                  <div key={axis} className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[9px] font-mono text-zinc-400 w-3 uppercase">{axis}</span>
+          <div className="absolute top-24 right-8 z-30 flex flex-col items-end gap-3 pointer-events-auto">
+            <div className="backdrop-blur-md bg-black/40 border border-white/[0.08] px-4 py-3 rounded-xl min-w-[280px] max-w-sm transition-all duration-300">
+              <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2">
+                <span className="text-[10px] font-mono tracking-widest text-zinc-400 uppercase font-semibold">3D Inspector</span>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
                     <input
-                      type="range"
-                      min={-Math.PI}
-                      max={Math.PI}
-                      step={0.01}
-                      value={logoDebugRot[axis]}
-                      onChange={(e) => setLogoDebugRot(prev => ({ ...prev, [axis]: parseFloat(e.target.value) }))}
-                      className="flex-1 h-1 accent-cyan-400"
+                      type="checkbox"
+                      checked={logoTuneMode}
+                      onChange={(e) => setLogoTuneMode(e.target.checked)}
+                      className="w-3 h-3 accent-cyan-400 rounded border-zinc-700 bg-zinc-800"
                     />
-                    <span className="text-[9px] font-mono text-cyan-300 w-12 text-right">{logoDebugRot[axis].toFixed(2)}</span>
-                  </div>
-                ))}
-                <div className="mt-2 bg-black/30 rounded p-1.5 font-mono text-[9px] text-zinc-300 leading-relaxed">
-                  <div>x: {logoDebugRot.x.toFixed(4)}</div>
-                  <div>y: {logoDebugRot.y.toFixed(4)}</div>
-                  <div>z: {logoDebugRot.z.toFixed(4)}</div>
-                </div>
-                <div className="flex gap-1.5 mt-2">
-                  <button
-                    onClick={() => {
-                      const val = `x: ${logoDebugRot.x.toFixed(4)}, y: ${logoDebugRot.y.toFixed(4)}, z: ${logoDebugRot.z.toFixed(4)}`;
-                      navigator.clipboard.writeText(val);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                    className="flex-1 text-[9px] font-mono py-1 rounded border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 transition-colors uppercase tracking-wider"
-                  >
-                    {copied ? '✓ Copied!' : 'Copy Values'}
-                  </button>
-                  <button
-                    onClick={() => setLogoDebugRot({ x: -Math.PI/2, y: 0, z: 0 })}
-                    className="text-[9px] font-mono px-2 py-1 rounded border border-zinc-600/30 text-zinc-400 hover:bg-zinc-700/20 transition-colors uppercase"
-                  >
-                    Reset
-                  </button>
+                    <span className="text-[10px] font-mono text-cyan-300 select-none hover:text-white transition-colors">Logo Tune</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={debugFullModel}
+                      onChange={(e) => {
+                        setDebugFullModel(e.target.checked);
+                        setClickedMesh(null);
+                      }}
+                      className="w-3 h-3 accent-amber-500 rounded border-zinc-700 bg-zinc-800"
+                    />
+                    <span className="text-[10px] font-mono text-zinc-300 select-none hover:text-white transition-colors">Full Model</span>
+                  </label>
                 </div>
               </div>
-            )}
-            
-            {debugFullModel && (
-              <div className="mb-2 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded">
-                <p className="text-[9px] text-amber-300 font-mono leading-tight">
-                  Drag to rotate. Scroll to zoom. Click parts to inspect.
-                </p>
-              </div>
-            )}
 
-            {clickedMesh ? (
-              <div className="mt-1">
-                <p className="text-[10px] text-zinc-400 font-mono">Selected mesh ID:</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="font-mono text-sm text-amber-500 font-bold select-all bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">{clickedMesh}</span>
-                  <button 
-                    onClick={() => setClickedMesh(null)}
-                    className="text-[9px] font-mono text-zinc-500 hover:text-white uppercase tracking-wider underline underline-offset-2"
-                  >
-                    Clear
-                  </button>
+              {logoTuneMode && (
+                <div className="mb-3 border border-cyan-500/20 bg-cyan-500/5 rounded-lg p-2.5">
+                  <p className="text-[9px] font-mono text-cyan-400 uppercase tracking-wider mb-2">Logo Rotation Tuner</p>
+                  {(['x', 'y', 'z'] as const).map((axis) => (
+                    <div key={axis} className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[9px] font-mono text-zinc-400 w-3 uppercase">{axis}</span>
+                      <input
+                        type="range"
+                        min={-Math.PI}
+                        max={Math.PI}
+                        step={0.01}
+                        value={logoDebugRot[axis]}
+                        onChange={(e) => setLogoDebugRot(prev => ({ ...prev, [axis]: parseFloat(e.target.value) }))}
+                        className="flex-1 h-1 accent-cyan-400"
+                      />
+                      <span className="text-[9px] font-mono text-cyan-300 w-12 text-right">{logoDebugRot[axis].toFixed(2)}</span>
+                    </div>
+                  ))}
+                  <div className="mt-2 bg-black/30 rounded p-1.5 font-mono text-[9px] text-zinc-300 leading-relaxed">
+                    <div>x: {logoDebugRot.x.toFixed(4)}</div>
+                    <div>y: {logoDebugRot.y.toFixed(4)}</div>
+                    <div>z: {logoDebugRot.z.toFixed(4)}</div>
+                  </div>
+                  <div className="flex gap-1.5 mt-2">
+                    <button
+                      onClick={() => {
+                        const val = `x: ${logoDebugRot.x.toFixed(4)}, y: ${logoDebugRot.y.toFixed(4)}, z: ${logoDebugRot.z.toFixed(4)}`;
+                        navigator.clipboard.writeText(val);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className="flex-1 text-[9px] font-mono py-1 rounded border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/10 transition-colors uppercase tracking-wider"
+                    >
+                      {copied ? '✓ Copied!' : 'Copy Values'}
+                    </button>
+                    <button
+                      onClick={() => setLogoDebugRot({ x: -Math.PI / 2, y: 0, z: 0 })}
+                      className="text-[9px] font-mono px-2 py-1 rounded border border-zinc-600/30 text-zinc-400 hover:bg-zinc-700/20 transition-colors uppercase"
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[9px] text-zinc-500 leading-relaxed mt-2">
-                  This part is highlighted in <span className="text-cyan-400 font-semibold">cyan</span>.
+              )}
+
+              {debugFullModel && (
+                <div className="mb-2 bg-amber-500/10 border border-amber-500/20 px-2 py-1 rounded">
+                  <p className="text-[9px] text-amber-300 font-mono leading-tight">
+                    Drag to rotate. Scroll to zoom. Click parts to inspect.
+                  </p>
+                </div>
+              )}
+
+              {clickedMesh ? (
+                <div className="mt-1">
+                  <p className="text-[10px] text-zinc-400 font-mono">Selected mesh ID:</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="font-mono text-sm text-amber-500 font-bold select-all bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">{clickedMesh}</span>
+                    <button
+                      onClick={() => setClickedMesh(null)}
+                      className="text-[9px] font-mono text-zinc-500 hover:text-white uppercase tracking-wider underline underline-offset-2"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-zinc-500 leading-relaxed mt-2">
+                    This part is highlighted in <span className="text-cyan-400 font-semibold">cyan</span>.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[10px] text-zinc-400 leading-relaxed mt-1">
+                  Click any part on the 3D model to identify its ID.
                 </p>
-              </div>
-            ) : (
-              <p className="text-[10px] text-zinc-400 leading-relaxed mt-1">
-                Click any part on the 3D model to identify its ID.
-              </p>
-            )}
+              )}
+            </div>
           </div>
-        </div>
         )}
 
         {/* ── Text panel — bottom-left, anime.js style ────────────────────── */}

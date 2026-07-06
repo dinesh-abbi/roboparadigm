@@ -55,9 +55,9 @@ export function Footer() {
               </a>
             </div>
 
-            <p className="mt-8 font-mono text-[10px] text-muted-foreground/50 tracking-wider">
+            {/* <p className="mt-8 font-mono text-[10px] text-muted-foreground/50 tracking-wider">
               // From perception to execution.
-            </p>
+            </p> */}
           </div>
 
           {/* Explore */}

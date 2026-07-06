@@ -55,3 +55,30 @@ You have successfully simulated the production environment!
 2. You will see your app! But you are actually talking to **Apache**, which is silently fetching the data from your **Node server** on port 3000. 
 
 Since you also have `ngrok http 8081` running in another terminal, anyone on the internet with your ngrok link is now hitting your local Apache server, which proxies to your Node server—exactly how it will work in production!
+
+
+### How to Use
+
+When building, you can control the base path directly from the command line:
+
+* **Build for root (`/`)**:
+  ```bash
+  npm run build
+  ```
+  *(Files will compile into `dist/`)*
+
+* **Build for `/rpd/`**:
+  ```bash
+  VITE_APP_BASE=/rpd/ npm run build
+  ```
+  *(Files will compile into `dist/rpd/`)*
+
+* **Build for any other folder (e.g., `/my-subfolder/`)**:
+  ```bash
+  VITE_APP_BASE=/my-subfolder/ npm run build
+  ```
+  *(Files will compile into `dist/my-subfolder/`)*
+
+All asset paths (including the 3D model path `roboparadigm-7dof.glb`) and router base paths will resolve perfectly to whichever directory you choose.
+
+Details can be found in the [walkthrough.md](file:///home/tele/.gemini/antigravity/brain/27582b8d-5852-416d-b158-679ae19e34e2/walkthrough.md) artifact. Let me know if you need anything else!

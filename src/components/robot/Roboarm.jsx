@@ -7,6 +7,7 @@ import React, { useRef, useState, useEffect } from 'react'
 import { useGLTF, Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useControls, button, folder } from 'leva'
 
 // ─── Named Subsystem Groups for Act 3 ────────────────────────────────────────
 export const SUBSYSTEM_GROUPS = {
@@ -34,8 +35,33 @@ export const JOINT_DEFS = [
   { name: 'Group_Gripper', label: 'GRIPPER', dof: 'END EFFECTOR', spec: '0–100mm jaw · 5N grip', color: '#f87171' },
 ];
 
+function MeshSimulator({ meshName, rest, onChange }) {
+  const overrides = useControls('3D Part Tuning', {
+    [meshName]: folder({
+      px: { value: rest.px, step: 0.1 },
+      py: { value: rest.py, step: 0.1 },
+      pz: { value: rest.pz, step: 0.1 },
+      rx: { value: rest.rx, step: 0.01 },
+      ry: { value: rest.ry, step: 0.01 },
+      rz: { value: rest.rz, step: 0.01 },
+      'Copy Part Config': button((get) => {
+        const o = get('3D Part Tuning.' + meshName);
+        const str = `"${meshName}": { px: ${o.px.toFixed(3)}, py: ${o.py.toFixed(3)}, pz: ${o.pz.toFixed(3)}, rx: ${o.rx.toFixed(3)}, ry: ${o.ry.toFixed(3)}, rz: ${o.rz.toFixed(3)} }`;
+        navigator.clipboard.writeText(str);
+        alert('Copied to clipboard!\n\n' + str);
+      })
+    })
+  }, [meshName, rest]);
+
+  React.useEffect(() => {
+    onChange(meshName, overrides);
+  }, [meshName, overrides, onChange]);
+
+  return null;
+}
+
 export function Model(props) {
-  const { nodes, materials } = useGLTF('/roboparadigm-7dof.glb')
+  const { nodes, materials } = useGLTF(`${import.meta.env.BASE_URL}roboparadigm-7dof.glb`)
 
   const groupRef = React.useRef(null)
   const particlesRef = React.useRef(null)
@@ -53,6 +79,9 @@ export function Model(props) {
   const highlightedJoint = props.highlightedJoint || null;
   const explodeMode = props.explodeMode || 'scatter';
   const onJointPositions = props.onJointPositions || null;
+  // highlightedSubsystem: SubsystemKey string from Hero panel selector (null = show all equally)
+  const highlightedSubsystem = props.highlightedSubsystem || null;
+  const subsysHighlightProgress = React.useRef({});
   const highlightProgress = React.useRef({});
   const subsysProgress = React.useRef({
     BASE: 0,
@@ -62,6 +91,11 @@ export function Model(props) {
     GRIPPER: 0,
   });
   const jointPositionsBuffer = React.useRef({});
+
+  const [partOverrides, setPartOverrides] = React.useState({});
+  const handleOverrideChange = React.useCallback((name, vals) => {
+    setPartOverrides(prev => ({ ...prev, [name]: vals }));
+  }, []);
 
   // Mouse kinematics refs
   const currentBaseY = React.useRef(0)
@@ -215,6 +249,12 @@ export function Model(props) {
             if (ref.userData.wireframeClone) {
               ref.userData.wireframeClone.visible = false;
             }
+          }
+          
+          if (partOverrides[name]) {
+            const ov = partOverrides[name];
+            ref.position.set(ov.px, ov.py, ov.pz);
+            ref.rotation.set(ov.rx, ov.ry, ov.rz);
           }
         }
       });
@@ -466,6 +506,12 @@ export function Model(props) {
           }
         }
 
+        if (partOverrides[name]) {
+          const ov = partOverrides[name];
+          ref.position.set(ov.px, ov.py, ov.pz);
+          ref.rotation.set(ov.rx, ov.ry, ov.rz);
+        }
+
         // Project world position to screen for DOM annotations
         ref.getWorldPosition(worldPos);
         worldPos.project(camera);
@@ -491,22 +537,54 @@ export function Model(props) {
         if (isFullyAssembled) {
           ref.position.set(rest.px, rest.py, rest.pz);
           ref.rotation.set(rest.rx, rest.ry, rest.rz);
-          if (ref.material) {
-            ref.material.opacity = 1;
-            ref.material.transparent = false;
-          }
-          if (ref.userData.wireframeClone) ref.userData.wireframeClone.visible = false;
 
+          // ── Subsystem highlight from Hero panel ──────────────────────────────
+          const meshSubsys = MESH_TO_SUBSYSTEM[name];
+          const isSubsysHighlighted = highlightedSubsystem && meshSubsys === highlightedSubsystem;
+          const isSubsysDimmed = highlightedSubsystem && meshSubsys !== highlightedSubsystem;
+
+          if (!subsysHighlightProgress.current[name]) subsysHighlightProgress.current[name] = 0;
+          const targetSubsysHp = isSubsysHighlighted ? 1 : 0;
+          subsysHighlightProgress.current[name] += (targetSubsysHp - subsysHighlightProgress.current[name]) * 0.06;
+          const shp = subsysHighlightProgress.current[name];
+
+          if (ref.material) {
+            ref.material.transparent = true;
+            // Dimmed meshes fade to 18%, highlighted ones glow at full opacity
+            const targetOpacity = isSubsysDimmed ? 0.10 : 1.0;
+            ref.material.opacity = isSubsysDimmed
+              ? 0.10 + (1 - 0.10) * (1 - (highlightedSubsystem ? 1 : 0))
+              : highlightedSubsystem
+                ? (isSubsysHighlighted ? 1.0 : 0.10)
+                : 1.0;
+          }
+          if (ref.userData.wireframeClone) {
+            ref.userData.wireframeClone.visible = isSubsysHighlighted;
+            if (isSubsysHighlighted) {
+              const subsysColor = SUBSYSTEM_GROUPS[meshSubsys]?.color || '#d4884c';
+              ref.userData.wireframeClone.material.color.set(subsysColor);
+              ref.userData.wireframeClone.material.opacity = 0.45;
+            }
+          }
+
+          // ── Joint highlight (existing) ───────────────────────────────────────
           const isHighlighted = highlightedJoint === name;
           if (!highlightProgress.current[name]) highlightProgress.current[name] = 0;
           highlightProgress.current[name] += ((isHighlighted ? 1 : 0) - highlightProgress.current[name]) * 0.08;
           const hp = highlightProgress.current[name];
 
           if (ref.material && ref.material.emissive !== undefined) {
-            const hlColor = isHighlighted ? (props.highlightColor || '#d4884c') : '#d4884c';
-            const pulse = hp * (0.4 + 0.6 * Math.sin(state.clock.elapsedTime * 3.5));
-            ref.material.emissive.set(hlColor);
-            ref.material.emissiveIntensity = pulse * 1.2;
+            if (isSubsysHighlighted) {
+              const subsysColor = SUBSYSTEM_GROUPS[meshSubsys]?.color || '#d4884c';
+              const pulse = 0.5 + 0.5 * Math.sin(state.clock.elapsedTime * 3);
+              ref.material.emissive.set(subsysColor);
+              ref.material.emissiveIntensity = shp * pulse * 0.8;
+            } else {
+              const hlColor = isHighlighted ? (props.highlightColor || '#d4884c') : '#d4884c';
+              const pulse = hp * (0.4 + 0.6 * Math.sin(state.clock.elapsedTime * 3.5));
+              ref.material.emissive.set(hlColor);
+              ref.material.emissiveIntensity = pulse * 1.2;
+            }
           }
         } else {
           const order = assemblyOrder.current[name] || 0.5;
@@ -606,6 +684,12 @@ export function Model(props) {
             ref.userData.wireframeClone.material.color.set("#00f0ff");
             ref.userData.wireframeClone.material.opacity = 0.9;
           }
+        }
+
+        if (partOverrides[name]) {
+          const ov = partOverrides[name];
+          ref.position.set(ov.px, ov.py, ov.pz);
+          ref.rotation.set(ov.rx, ov.ry, ov.rz);
         }
 
         ref.getWorldPosition(worldPos);
@@ -735,6 +819,13 @@ export function Model(props) {
 
   return (
     <group {...props} dispose={null}>
+      {props.debugFullModel && props.clickedMesh && restPose.current[props.clickedMesh] && (
+        <MeshSimulator 
+          meshName={props.clickedMesh} 
+          rest={restPose.current[props.clickedMesh]} 
+          onChange={handleOverrideChange} 
+        />
+      )}
       <group
         ref={groupRef}
         onClick={(e) => {
@@ -895,4 +986,4 @@ export function Model(props) {
   )
 }
 
-useGLTF.preload('/roboparadigm-7dof.glb')
+useGLTF.preload(`${import.meta.env.BASE_URL}roboparadigm-7dof.glb`)
